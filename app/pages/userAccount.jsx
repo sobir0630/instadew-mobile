@@ -60,8 +60,16 @@ async function fetchUserPosts(username) {
   return d?.posts && Array.isArray(d.posts) ? d.posts : Array.isArray(d) ? d : d?.results || d?.data || [];
 }
 
+async function fetchUserVideos(username) {
+  const headers = await auth();
+  const res = await API.get(`/videos/user-videos/${username}/`, { headers });
+  const d = res.data;
+  return Array.isArray(d) ? d : d?.results || d?.data || [];
+}
+
 async function toggleFollowAPI() {
   const username = await AsyncStorage.getItem("username_account");
+  console.log("bu username", username)
   const headers = await auth();
   const res = await API.post(`/follows/follows/toggle/`, { username }, { headers });
   return res.data;
@@ -77,7 +85,7 @@ async function fetchComments(postId) {
 async function submitComment(postId, text) {
   const myId = await getMyId();
   const headers = await auth();
-  const res = await API.post(`/comments/comments/`, { post: postId, text, user: myId }, { headers });
+  const res = await API.post(`/comments/comments/`, { post_id: postId, text, user: myId }, { headers });
   return res.data;
 }
 
@@ -964,6 +972,7 @@ export default function UserProfileScreen() {
 
   const [user, setUser] = useState(null);
   const [posts, setPosts] = useState([]);
+  const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [following, setFollowing] = useState(false);
@@ -1010,6 +1019,8 @@ export default function UserProfileScreen() {
       setFollowing(userData.is_following ?? userData.is_followed ?? false);
       const postsData = await fetchUserPosts(targetUsername);
       setPosts(postsData);
+      const videosData = await fetchUserVideos(targetUsername);
+      setVideos(videosData);
     } catch (err) {
       console.log("Load error:", err);
       const s = err?.response?.status;
@@ -1084,7 +1095,7 @@ export default function UserProfileScreen() {
     { href: "/pages/home", active: false, Icon: IconHome },
     { href: "/pages/message", active: false, Icon: IconLogoGlobe },
     { href: "/pages/createPost", active: false, Icon: IconCreate },
-    { href: "/pages/movie", active: false, Icon: IconMovie },
+    { href: "/pages/reals", active: false, Icon: IconMovie },
     { href: "/pages/profile", active: false, Icon: IconPersonNav },
   ];
 
@@ -1244,7 +1255,7 @@ export default function UserProfileScreen() {
         ) : activeTab === "photos" ? (
           <PhotosTab posts={posts} privateBlocked={privateBlocked} setOpenPost={setOpenPost} />
         ) : activeTab === "videos" ? (
-          <VideosTab posts={posts} privateBlocked={privateBlocked} setOpenVideo={setOpenVideo} />
+          <VideosTab posts={videos} privateBlocked={privateBlocked} setOpenVideo={setOpenVideo} />
         ) : (
           <GridTab posts={posts} privateBlocked={privateBlocked} setOpenPost={setOpenPost} setOpenVideo={setOpenVideo} />
         )}

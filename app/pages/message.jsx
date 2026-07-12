@@ -1,27 +1,91 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import API from "../api/server";
+import WS_URLs from "../api/config";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
+  Pressable,
   Image,
+  ImageBackground,
   StyleSheet,
   FlatList,
   ActivityIndicator,
   Modal,
   Platform,
   KeyboardAvoidingView,
+  Keyboard,
   SafeAreaView,
   Animated,
   Clipboard,
   Dimensions,
+  Alert,
+  Linking,
 } from "react-native";
-import Svg, { Path, Circle, Line, Polyline, Polygon } from "react-native-svg";
+import Svg, { Path, Circle, Line, Polyline, Polygon, Rect } from "react-native-svg";
+import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
+import { Audio, Video, ResizeMode } from "expo-av";
+import { LinearGradient } from "expo-linear-gradient";
 
 const { width: SCREEN_W } = Dimensions.get("window");
+
+// ════════════════════════════════════════════════════════════════════════════
+//  CONSTANTS
+// ════════════════════════════════════════════════════════════════════════════
+
+const MSG_TYPE = {
+  TEXT: "text",
+  IMAGE: "image",
+  VIDEO: "video",
+  AUDIO: "audio",
+  VOICE: "voice",
+  FILE: "file",
+};
+
+const MAX_TEXT_LENGTH = 4000;
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024; // 15MB
+const MAX_VIDEO_BYTES = 60 * 1024 * 1024; // 60MB
+const MAX_AUDIO_BYTES = 30 * 1024 * 1024; // 30MB
+const MIN_VOICE_MS = 700; // ignore accidental taps shorter than this
+
+const WALLPAPER_CATEGORIES = [
+  { key: "none", label: "Standart" },
+  { key: "love", label: "Sevgi" },
+  { key: "friends", label: "Do'stlar" },
+  { key: "alone", label: "Yolg'iz" },
+  { key: "business", label: "Biznes" },
+];
+
+const WALLPAPER_PRESETS = {
+  love: [
+    ["#ff9a9e", "#fecfef"],
+    ["#ff6a88", "#ff99ac"],
+    ["#f857a6", "#ff5858"],
+    ["#ffafbd", "#ffc3a0"],
+  ],
+  friends: [
+    ["#f6d365", "#fda085"],
+    ["#84fab0", "#8fd3f4"],
+    ["#fccb90", "#d57eeb"],
+    ["#a1c4fd", "#c2e9fb"],
+  ],
+  alone: [
+    ["#2c3e50", "#4b6584"],
+    ["#232526", "#414345"],
+    ["#0f2027", "#2c5364"],
+    ["#141e30", "#243b55"],
+  ],
+  business: [
+    ["#1e3c72", "#2a5298"],
+    ["#373b44", "#4286f4"],
+    ["#0f0c29", "#302b63"],
+    ["#134e5e", "#71b280"],
+  ],
+};
 
 // ════════════════════════════════════════════════════════════════════════════
 //  UTILS
@@ -30,17 +94,36 @@ const { width: SCREEN_W } = Dimensions.get("window");
 let _myUsernameCache = null;
 async function getMyUser() {
   if (_myUsernameCache) return _myUsernameCache;
-  const u = (await AsyncStorage.getItem("username")) || (await AsyncStorage.getItem("login_username")) || "me";
-  _myUsernameCache = u;
-  return u;
+  try {
+    const u =
+      (await AsyncStorage.getItem("username")) ||
+      (await AsyncStorage.getItem("login_username")) ||
+      "me";
+    _myUsernameCache = u;
+    return u;
+  } catch (err) {
+    console.error("[getMyUser] error:", err);
+    return "me";
+  }
 }
+
 async function authHeader() {
-  const token = await AsyncStorage.getItem("token");
-  return { Authorization: `Bearer ${token?.trim()}` };
+  try {
+    const token = await AsyncStorage.getItem("token");
+    return { Authorization: `Bearer ${token?.trim()}` };
+  } catch (err) {
+    console.error("[authHeader] error:", err);
+    return {};
+  }
 }
 
 export function buildRoomName(u1, u2) {
   return [u1, u2].sort().join("_");
+}
+
+function wsBase() {
+  const base = WS_URLs || "ws://10.59.78.111:8000";
+  return base.endsWith("/") ? base.slice(0, -1) : base;
 }
 
 async function fetchHistory(roomName) {
@@ -49,39 +132,39 @@ async function fetchHistory(roomName) {
     const res = await API.get(`/messages/history/`, { params: { room: roomName }, headers });
     const d = res.data;
     return Array.isArray(d) ? d : d?.results || d?.messages || [];
-  } catch {
+  } catch (err) {
+    console.error("[fetchHistory] error:", err?.response?.data || err.message);
     return [];
   }
 }
 
 async function fetchUsers() {
-
-  const token = await AsyncStorage.getItem("token");
-
   try {
     const headers = await authHeader();
     const res = await API.get(`/users/register/`, { headers });
     const d = res.data;
     return Array.isArray(d) ? d : d?.results || [];
   } catch (err) {
-        console.log("FULL ERROR:", err);
-        console.log("MESSAGE:", err?.message);
-        console.log("RESPONSE:", err?.response);
-        console.log("REQUEST:", err?.request);
-        return [];
+    console.error("[fetchUsers] error:", err?.response?.data || err.message);
+    return [];
   }
 }
 
 async function fetchAllLastMessages(users, myUsername) {
-  const entries = await Promise.all(
-    users.map(async (u) => {
-      const room = buildRoomName(myUsername, u.username);
-      const hist = await fetchHistory(room);
-      const last = hist.length > 0 ? hist[hist.length - 1] : null;
-      return [u.username, last];
-    })
-  );
-  return Object.fromEntries(entries);
+  try {
+    const entries = await Promise.all(
+      users.map(async (u) => {
+        const room = buildRoomName(myUsername, u.username);
+        const hist = await fetchHistory(room);
+        const last = hist.length > 0 ? hist[hist.length - 1] : null;
+        return [u.username, last];
+      })
+    );
+    return Object.fromEntries(entries);
+  } catch (err) {
+    console.error("[fetchAllLastMessages] error:", err);
+    return {};
+  }
 }
 
 function timeOnly(isoStr) {
@@ -95,7 +178,8 @@ function timeOnly(isoStr) {
     yesterday.setDate(now.getDate() - 1);
     if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  } catch {
+  } catch (err) {
+    console.error("[timeOnly] error:", err);
     return "";
   }
 }
@@ -103,7 +187,34 @@ function timeOnly(isoStr) {
 function getInitials(name = "") {
   const s = String(name || "").trim();
   if (!s) return "?";
-  return s.split(/\s+/).map((w) => w[0]).join("").toUpperCase().slice(0, 2) || "?";
+  return (
+    s
+      .split(/\s+/)
+      .map((w) => w[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2) || "?"
+  );
+}
+
+function formatDuration(ms = 0) {
+  const totalSec = Math.max(0, Math.round((ms || 0) / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function formatFileSize(bytes = 0) {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function sanitizeText(text) {
+  return String(text || "")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "") // strip control chars
+    .slice(0, MAX_TEXT_LENGTH);
 }
 
 const PALETTES = [
@@ -115,6 +226,89 @@ function getPalette(name = "") {
   if (!name || typeof name !== "string") return PALETTES[0];
   const idx = [...name].reduce((a, c) => a + c.charCodeAt(0), 0) % PALETTES.length;
   return PALETTES[idx];
+}
+
+async function ensureMediaLibraryPermission() {
+  try {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Ruxsat kerak", "Davom etish uchun galereyadan foydalanishga ruxsat bering.");
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[permissions] media library error:", err);
+    return false;
+  }
+}
+
+async function ensureCameraPermission() {
+  try {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Ruxsat kerak", "Davom etish uchun kameradan foydalanishga ruxsat bering.");
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[permissions] camera error:", err);
+    return false;
+  }
+}
+
+async function ensureMicPermission() {
+  try {
+    const { status } = await Audio.requestPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Ruxsat kerak", "Ovozli xabar yuborish uchun mikrofonga ruxsat bering.");
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[permissions] microphone error:", err);
+    return false;
+  }
+}
+
+// Single shared audio player so only one clip plays at a time (image of Telegram behaviour)
+let _activeSound = null;
+let _activeOnPlayingChange = null;
+async function playAudioExclusive(uri, onPlayingChange, onFinish) {
+  try {
+    if (_activeSound) {
+      await _activeSound.stopAsync().catch(() => {});
+      await _activeSound.unloadAsync().catch(() => {});
+      _activeOnPlayingChange?.(false);
+      _activeSound = null;
+    }
+    await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
+    const { sound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
+    _activeSound = sound;
+    _activeOnPlayingChange = onPlayingChange;
+    onPlayingChange(true);
+    sound.setOnPlaybackStatusUpdate((status) => {
+      if (status?.didJustFinish) {
+        onFinish?.();
+        onPlayingChange(false);
+        _activeSound = null;
+      }
+    });
+  } catch (err) {
+    console.error("[audio] play error:", err);
+    onPlayingChange(false);
+  }
+}
+async function stopAudioExclusive() {
+  try {
+    if (_activeSound) {
+      await _activeSound.stopAsync().catch(() => {});
+      await _activeSound.unloadAsync().catch(() => {});
+      _activeOnPlayingChange?.(false);
+      _activeSound = null;
+    }
+  } catch (err) {
+    console.error("[audio] stop error:", err);
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -130,8 +324,6 @@ function useChat(roomName) {
   const timerRef = useRef(null);
   const myUserRef = useRef("me");
 
-  const WS_URL = "ws://10.13.93.81:8000";
-
   useEffect(() => {
     getMyUser().then((u) => (myUserRef.current = u));
   }, []);
@@ -140,75 +332,100 @@ function useChat(roomName) {
     if (!roomName) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
     setConnecting(true);
-    const ws = new WebSocket(`${WS_URL}/ws/chat/${roomName}/`);
-    wsRef.current = ws;
+    try {
+      const ws = new WebSocket(`${wsBase()}/ws/chat/${roomName}/`);
+      wsRef.current = ws;
 
-    ws.onopen = () => { setConnected(true); setConnecting(false); };
-    ws.onerror = () => { setConnecting(false); };
-    ws.onclose = () => { setConnected(false); setConnecting(false); };
+      ws.onopen = () => { setConnected(true); setConnecting(false); };
+      ws.onerror = (e) => { console.error("[chat-ws] error:", e?.message || e); setConnecting(false); };
+      ws.onclose = () => { setConnected(false); setConnecting(false); };
 
-    ws.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        const t = data.type || data.message_type;
+      ws.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          const t = data.type || data.message_type;
 
-        if (t === "typing" && data.sender !== myUserRef.current) {
-          setTyping(true);
-          clearTimeout(timerRef.current);
-          timerRef.current = setTimeout(() => setTyping(false), 2500);
-          return;
-        }
+          if (t === "typing" && data.sender !== myUserRef.current) {
+            setTyping(true);
+            clearTimeout(timerRef.current);
+            timerRef.current = setTimeout(() => setTyping(false), 2500);
+            return;
+          }
 
-        if (t === "chat_message" || data.message) {
-          const msgText = data.message || data.text || data.content || "";
-          const sender = data.sender || data.username || data.sender_username || "?";
+          if (t === "chat_message" || data.message || data.media_url) {
+            const msgText = data.message || data.text || data.content || "";
+            const sender = data.sender || data.username || data.sender_username || "?";
 
-          setMessages((prev) => {
-            const newMsg = {
-              id: data.id || `ws_${Date.now()}`,
-              message: msgText,
-              content: msgText,
-              sender,
-              sender_username: sender,
-              timestamp: data.timestamp || data.created_at || new Date().toISOString(),
-              is_edited: data.is_edited || false,
-            };
+            setMessages((prev) => {
+              const newMsg = {
+                id: data.id || `ws_${Date.now()}`,
+                type: data.message_type_kind || data.msg_type || MSG_TYPE.TEXT,
+                message: msgText,
+                content: msgText,
+                media_url: data.media_url || null,
+                file_name: data.file_name || null,
+                file_size: data.file_size || null,
+                duration: data.duration || null,
+                sender,
+                sender_username: sender,
+                timestamp: data.timestamp || data.created_at || new Date().toISOString(),
+                is_edited: data.is_edited || false,
+              };
 
-            if (sender === myUserRef.current) {
-              const localIdx = prev.findIndex((m) => m._local && m.message === msgText);
-              if (localIdx !== -1) {
-                const updated = [...prev];
-                updated[localIdx] = { ...updated[localIdx], ...newMsg, _local: false };
-                return updated;
+              if (sender === myUserRef.current) {
+                const localIdx = prev.findIndex((m) => m._local && m.message === msgText);
+                if (localIdx !== -1) {
+                  const updated = [...prev];
+                  updated[localIdx] = { ...updated[localIdx], ...newMsg, _local: false };
+                  return updated;
+                }
+                return prev;
               }
-              return prev;
-            }
 
-            if (data.id && prev.some((m) => m.id === data.id)) return prev;
-            return [...prev, newMsg];
-          });
-          setTyping(false);
+              if (data.id && prev.some((m) => m.id === data.id)) return prev;
+              return [...prev, newMsg];
+            });
+            setTyping(false);
+          }
+        } catch (err) {
+          console.error("[chat-ws] message parse error:", err);
         }
-      } catch {}
-    };
+      };
+    } catch (err) {
+      console.error("[chat-ws] connect error:", err);
+      setConnecting(false);
+    }
   }, [roomName]);
 
   const disconnect = useCallback(() => {
-    wsRef.current?.close();
+    try {
+      wsRef.current?.close();
+    } catch (err) {
+      console.error("[chat-ws] disconnect error:", err);
+    }
     wsRef.current = null;
   }, []);
 
   const sendMessage = useCallback((text) => {
     if (wsRef.current?.readyState !== WebSocket.OPEN) return false;
-    wsRef.current.send(
-      JSON.stringify({ type: "chat_message", message: text, sender: myUserRef.current, timestamp: new Date().toISOString() })
-    );
-    return true;
+    try {
+      wsRef.current.send(
+        JSON.stringify({ type: "chat_message", message: text, sender: myUserRef.current, timestamp: new Date().toISOString() })
+      );
+      return true;
+    } catch (err) {
+      console.error("[chat-ws] send error:", err);
+      return false;
+    }
   }, []);
 
   const sendTyping = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: "typing", sender: myUserRef.current }));
+      try {
+        wsRef.current.send(JSON.stringify({ type: "typing", sender: myUserRef.current }));
+      } catch (err) {
+        console.error("[chat-ws] typing send error:", err);
+      }
     }
   }, []);
 
@@ -220,6 +437,72 @@ function useChat(roomName) {
   }, [roomName]);
 
   return { messages, setMessages, connected, connecting, typing, sendMessage, sendTyping, reconnect: connect };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  VOICE RECORDER HOOK
+// ════════════════════════════════════════════════════════════════════════════
+
+function useVoiceRecorder() {
+  const recordingRef = useRef(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [durationMs, setDurationMs] = useState(0);
+  const timerRef = useRef(null);
+
+  const start = useCallback(async () => {
+    try {
+      const ok = await ensureMicPermission();
+      if (!ok) return false;
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      recordingRef.current = recording;
+      setIsRecording(true);
+      setDurationMs(0);
+      clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => setDurationMs((d) => d + 200), 200);
+      return true;
+    } catch (err) {
+      console.error("[voice-recorder] start error:", err);
+      return false;
+    }
+  }, []);
+
+  const stop = useCallback(async () => {
+    clearInterval(timerRef.current);
+    setIsRecording(false);
+    const rec = recordingRef.current;
+    if (!rec) return null;
+    try {
+      await rec.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      const uri = rec.getURI();
+      const finalDuration = durationMs;
+      recordingRef.current = null;
+      return { uri, duration: finalDuration };
+    } catch (err) {
+      console.error("[voice-recorder] stop error:", err);
+      recordingRef.current = null;
+      return null;
+    }
+  }, [durationMs]);
+
+  const cancel = useCallback(async () => {
+    clearInterval(timerRef.current);
+    setIsRecording(false);
+    const rec = recordingRef.current;
+    try {
+      if (rec) await rec.stopAndUnloadAsync().catch(() => {});
+    } catch (err) {
+      console.error("[voice-recorder] cancel error:", err);
+    } finally {
+      recordingRef.current = null;
+      setDurationMs(0);
+    }
+  }, []);
+
+  useEffect(() => () => clearInterval(timerRef.current), []);
+
+  return { isRecording, durationMs, start, stop, cancel };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -318,9 +601,9 @@ const IconLogoGlobe = ({ size = 26, color = "#fff" }) => (
     <Path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" />
   </Svg>
 );
-const IconCreate = ({ size = 22, color = "currentColor" }) => (
+const IconCreate = ({ size = 22, color = "#57606a" }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
-    <Path d="M3 3h18v18H3z" opacity="0" />
+    <Rect x="3" y="3" width="18" height="18" rx="2" />
     <Line x1="12" y1="8" x2="12" y2="16" /><Line x1="8" y1="12" x2="16" y2="12" />
   </Svg>
 );
@@ -334,13 +617,57 @@ const IconPerson = ({ size = 22, color = "currentColor" }) => (
     <Path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><Circle cx="12" cy="7" r="4" />
   </Svg>
 );
+const IconPaperclip = ({ size = 20, color = "currentColor" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
+    <Path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+  </Svg>
+);
+const IconMic = ({ size = 18, color = "#fff" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
+    <Path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+    <Path d="M19 10v2a7 7 0 0 1-14 0v-2" /><Line x1="12" y1="19" x2="12" y2="23" /><Line x1="8" y1="23" x2="16" y2="23" />
+  </Svg>
+);
+const IconImageIcon = ({ size = 22, color = "#fff" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
+    <Rect x="3" y="3" width="18" height="18" rx="2" /><Circle cx="8.5" cy="8.5" r="1.5" />
+    <Polyline points="21 15 16 10 5 21" />
+  </Svg>
+);
+const IconCamera = ({ size = 22, color = "#fff" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
+    <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+    <Circle cx="12" cy="13" r="4" />
+  </Svg>
+);
+const IconMusicNote = ({ size = 20, color = "currentColor" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
+    <Path d="M9 18V5l12-2v13" /><Circle cx="6" cy="18" r="3" /><Circle cx="18" cy="16" r="3" />
+  </Svg>
+);
+const IconPlaySmall = ({ size = 14, color = "#fff" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+    <Polygon points="6 3 20 12 6 21 6 3" />
+  </Svg>
+);
+const IconPauseSmall = ({ size = 14, color = "#fff" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+    <Rect x="5" y="3" width="5" height="18" /><Rect x="14" y="3" width="5" height="18" />
+  </Svg>
+);
+const IconPalette = ({ size = 18, color = "currentColor" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
+    <Path d="M12 2a10 10 0 1 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1.1.9-2 2-2h2.5a3 3 0 0 0 3-3A10 10 0 0 0 12 2z" />
+    <Circle cx="7.5" cy="10.5" r="1.2" /><Circle cx="12" cy="7.5" r="1.2" /><Circle cx="16.5" cy="10.5" r="1.2" />
+  </Svg>
+);
 
 // ════════════════════════════════════════════════════════════════════════════
 //  AVATAR
 // ════════════════════════════════════════════════════════════════════════════
 
 function Avatar({ name = "", size = 40, showRing = false, src = null, online = null, accentColor, bgColor }) {
-  const [c1, c2] = getPalette(name);
+  const [c1] = getPalette(name);
   return (
     <View style={{ position: "relative", width: size, height: size }}>
       <View
@@ -413,6 +740,227 @@ function DropMenu({ visible, onClose, items, theme }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+//  ATTACHMENT BOTTOM SHEET
+// ════════════════════════════════════════════════════════════════════════════
+
+function AttachSheet({ visible, onClose, theme, onPickImage, onPickVideo, onPickDocument, onOpenCamera }) {
+  const options = [
+    { label: "Rasm", icon: <IconImageIcon />, bg: "#8B5CF6", action: onPickImage },
+    { label: "Video", icon: <IconMovie size={22} color="#fff" />, bg: "#EC4899", action: onPickVideo },
+    { label: "Kamera", icon: <IconCamera />, bg: "#10B981", action: onOpenCamera },
+    { label: "Musiqa/Fayl", icon: <IconMusicNote color="#fff" />, bg: "#F59E0B", action: onPickDocument },
+  ];
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableOpacity style={styles.sheetOverlay} activeOpacity={1} onPress={onClose}>
+        <View style={[styles.sheetCard, { backgroundColor: theme.surface }]}>
+          <View style={[styles.sheetHandle, { backgroundColor: theme.border }]} />
+          <Text style={{ fontSize: 15, fontWeight: "700", color: theme.text, marginBottom: 14 }}>Biriktirish</Text>
+          <View style={styles.sheetGrid}>
+            {options.map((o, i) => (
+              <TouchableOpacity key={i} style={styles.sheetItem} onPress={() => { o.action(); onClose(); }}>
+                <View style={[styles.sheetIconCircle, { backgroundColor: o.bg }]}>{o.icon}</View>
+                <Text style={{ fontSize: 12, color: theme.text, marginTop: 6, fontWeight: "500" }}>{o.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  WALLPAPER (CHAT BACKGROUND) BOTTOM SHEET
+// ════════════════════════════════════════════════════════════════════════════
+
+function WallpaperSheet({ visible, onClose, theme, onSelectGradient, onSelectCustom, onReset }) {
+  const [cat, setCat] = useState("love");
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableOpacity style={styles.sheetOverlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity activeOpacity={1} style={[styles.wallpaperCard, { backgroundColor: theme.surface }]}>
+          <View style={[styles.sheetHandle, { backgroundColor: theme.border }]} />
+          <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text, marginBottom: 12 }}>conversation fon</Text>
+
+          <View style={styles.catTabsRow}>
+            {WALLPAPER_CATEGORIES.map((c) => (
+              <TouchableOpacity
+                key={c.key}
+                onPress={() => setCat(c.key)}
+                style={[
+                  styles.catTab,
+                  { borderColor: theme.border },
+                  cat === c.key && { backgroundColor: theme.accent, borderColor: theme.accent },
+                ]}
+              >
+                <Text style={{ fontSize: 12, color: cat === c.key ? "#fff" : theme.sub, fontWeight: "600" }}>
+                  {c.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {cat === "none" ? (
+            <TouchableOpacity
+              onPress={() => { onReset(); onClose(); }}
+              style={[styles.resetWallBtn, { borderColor: theme.border }]}
+            >
+              <Text style={{ color: theme.text, fontWeight: "600" }}>Standart fonni tiklash</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.wallGrid}>
+              {(WALLPAPER_PRESETS[cat] || []).map((colors, i) => (
+                <TouchableOpacity
+                  key={i}
+                  onPress={() => { onSelectGradient(colors); onClose(); }}
+                  style={styles.wallSwatchWrap}
+                >
+                  <LinearGradient colors={colors} style={styles.wallSwatch} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          <TouchableOpacity
+            onPress={() => { onSelectCustom(); onClose(); }}
+            style={[styles.customWallBtn, { borderColor: theme.accent }]}
+          >
+            <IconImageIcon size={18} color={theme.accent} />
+            <Text style={{ color: theme.accent, fontWeight: "700", marginLeft: 8 }}>Galereyadan rasm tanlash</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  FULLSCREEN MEDIA VIEWERS
+// ════════════════════════════════════════════════════════════════════════════
+
+function ImageViewerModal({ uri, visible, onClose }) {
+  return (
+    <Modal visible={visible && !!uri} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.viewerOverlay}>
+        <TouchableOpacity style={styles.viewerCloseBtn} onPress={onClose}>
+          <IconClose size={20} color="#fff" />
+        </TouchableOpacity>
+        {uri ? <Image source={{ uri }} style={styles.viewerImage} resizeMode="contain" /> : null}
+      </View>
+    </Modal>
+  );
+}
+
+function VideoViewerModal({ uri, visible, onClose }) {
+  return (
+    <Modal visible={visible && !!uri} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.viewerOverlay}>
+        <TouchableOpacity style={styles.viewerCloseBtn} onPress={onClose}>
+          <IconClose size={20} color="#fff" />
+        </TouchableOpacity>
+        {uri ? (
+          <Video
+            source={{ uri }}
+            style={styles.viewerVideo}
+            useNativeControls
+            resizeMode={ResizeMode.CONTAIN}
+            shouldPlay
+            isLooping={false}
+          />
+        ) : null}
+      </View>
+    </Modal>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  MEDIA MESSAGE BUBBLES
+// ════════════════════════════════════════════════════════════════════════════
+
+function AudioMessageBubble({ uri, duration, isMe, theme, label }) {
+  const [playing, setPlaying] = useState(false);
+
+  const toggle = async () => {
+    if (!uri) return;
+    if (playing) {
+      await stopAudioExclusive();
+      setPlaying(false);
+    } else {
+      await playAudioExclusive(uri, setPlaying);
+    }
+  };
+
+  return (
+    <TouchableOpacity onPress={toggle} activeOpacity={0.85} style={styles.audioBubbleRow}>
+      <View style={[styles.audioPlayBtn, { backgroundColor: isMe ? "rgba(255,255,255,0.25)" : theme.accent }]}>
+        {playing ? <IconPauseSmall /> : <IconPlaySmall />}
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        {label ? (
+          <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: "600", color: isMe ? "#fff" : theme.text }}>
+            {label}
+          </Text>
+        ) : null}
+        <View style={styles.waveRow}>
+          {Array.from({ length: 18 }).map((_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.waveBar,
+                { height: 4 + ((i * 37) % 14), backgroundColor: isMe ? "rgba(255,255,255,0.6)" : theme.sub },
+              ]}
+            />
+          ))}
+        </View>
+      </View>
+      <Text style={{ fontSize: 10, color: isMe ? "rgba(255,255,255,0.85)" : theme.sub, marginLeft: 6 }}>
+        {formatDuration(duration)}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+function VideoMessageBubble({ uri, onPress }) {
+  const videoRef = useRef(null);
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
+      <Video
+        ref={videoRef}
+        source={{ uri }}
+        style={styles.videoBubble}
+        resizeMode={ResizeMode.COVER}
+        isMuted
+        isLooping={false}
+      />
+      <View style={styles.videoPlayOverlay}>
+        <IconPlaySmall size={20} color="#fff" />
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+function FileMessageBubble({ fileName, fileSize, isMe, theme, onOpen }) {
+  return (
+    <TouchableOpacity onPress={onOpen} activeOpacity={0.85} style={styles.fileBubbleRow}>
+      <View style={[styles.filesIconWrap, { backgroundColor: isMe ? "rgba(255,255,255,0.25)" : theme.card }]}>
+        <IconMusicNote color={isMe ? "#fff" : theme.accent} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: "600", color: isMe ? "#fff" : theme.text }}>
+          {fileName || "Fayl"}
+        </Text>
+        {fileSize ? (
+          <Text style={{ fontSize: 11, color: isMe ? "rgba(255,255,255,0.8)" : theme.sub }}>
+            {formatFileSize(fileSize)}
+          </Text>
+        ) : null}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 //  THEMES
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -431,7 +979,7 @@ const DARK = {
 //  MAIN CHAT SCREEN
 // ════════════════════════════════════════════════════════════════════════════
 
-export default function ChatScreen() {
+function ChatScreenInner() {
   const router = useRouter();
 
   const [myUsername, setMyUsername] = useState("me");
@@ -451,15 +999,23 @@ export default function ChatScreen() {
   const [msgSearch, setMsgSearch] = useState("");
   const [showMsgSearch, setShowMsgSearch] = useState(false);
   const [editingMsg, setEditingMsg] = useState(null);
+  const [sending, setSending] = useState(false);
 
   const [headerMenuVisible, setHeaderMenuVisible] = useState(false);
-  const [msgMenuFor, setMsgMenuFor] = useState(null); // message currently showing action menu
+  const [msgMenuFor, setMsgMenuFor] = useState(null);
+  const [attachSheetVisible, setAttachSheetVisible] = useState(false);
+  const [wallpaperSheetVisible, setWallpaperSheetVisible] = useState(false);
+  const [wallpaper, setWallpaper] = useState(null);
+  const [viewerImageUri, setViewerImageUri] = useState(null);
+  const [viewerVideoUri, setViewerVideoUri] = useState(null);
 
   const flatListRef = useRef(null);
   const inputRef = useRef(null);
   const typingRef = useRef(null);
+  const lastTypingSentAt = useRef(0);
 
   const { messages, setMessages, connected, connecting, typing, sendMessage, sendTyping, reconnect } = useChat(roomName);
+  const recorder = useVoiceRecorder();
 
   const t = dark ? DARK : LIGHT;
 
@@ -470,25 +1026,30 @@ export default function ChatScreen() {
   // Load users + last messages
   useEffect(() => {
     (async () => {
-      const me = await getMyUser();
-      const all = await fetchUsers();
-      const others = all.filter((u) => u.username !== me);
-      setUsers(others);
-      setUsersLoading(false);
-      const map = await fetchAllLastMessages(others, me);
-      setLastMsgMap(map);
+      try {
+        const me = await getMyUser();
+        const all = await fetchUsers();
+        const others = all.filter((u) => u.username !== me);
+        setUsers(others);
+        setUsersLoading(false);
+        const map = await fetchAllLastMessages(others, me);
+        setLastMsgMap(map);
+      } catch (err) {
+        console.error("[ChatScreen] initial load error:", err);
+        setUsersLoading(false);
+      }
     })();
   }, []);
 
-  // Presence WebSocket
+  // Presence WebSocket (uses same host/config as chat socket)
   useEffect(() => {
-    let ws, retryTimer;
-    const WS_URL2 = "ws://10.13.93.81:8000";
+    let ws;
+    let retryTimer;
 
     const tryConnect = () => {
       try {
-        ws = new WebSocket(`${WS_URL2}/ws/presence/`);
-        ws.onopen = () => console.log("presence ws connected");
+        ws = new WebSocket(`${wsBase()}/ws/presence/`);
+        ws.onopen = () => console.log("[presence-ws] connected");
         ws.onmessage = (e) => {
           try {
             const d = JSON.parse(e.data);
@@ -500,13 +1061,28 @@ export default function ChatScreen() {
             if (d.type === "user_status" && d.username) {
               setOnlineMap((prev) => ({ ...prev, [d.username]: !!d.online }));
             }
-          } catch {}
+          } catch (err) {
+            console.error("[presence-ws] parse error:", err);
+          }
         };
+        ws.onerror = (e) => console.error("[presence-ws] error:", e?.message || e);
         ws.onclose = () => { retryTimer = setTimeout(tryConnect, 5000); };
-      } catch {}
+      } catch (err) {
+        console.error("[presence-ws] connect error:", err);
+        retryTimer = setTimeout(tryConnect, 5000);
+      }
     };
     tryConnect();
     return () => { ws?.close(); clearTimeout(retryTimer); };
+  }, []);
+
+  // Auto-scroll to bottom when the keyboard opens, Telegram-style
+  useEffect(() => {
+    const showEvt = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const sub = Keyboard.addListener(showEvt, () => {
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 60);
+    });
+    return () => sub.remove();
   }, []);
 
   const sortedUsers = [...users].sort((a, b) => {
@@ -527,6 +1103,16 @@ export default function ChatScreen() {
 
   const isOnline = (username) => !!onlineMap[username];
 
+  const loadWallpaper = async (room) => {
+    try {
+      const saved = await AsyncStorage.getItem(`wallpaper_${room}`);
+      setWallpaper(saved ? JSON.parse(saved) : null);
+    } catch (err) {
+      console.error("[wallpaper] load error:", err);
+      setWallpaper(null);
+    }
+  };
+
   const openChat = async (user) => {
     setActiveUser(user);
     const room = buildRoomName(myUsername, user.username);
@@ -538,58 +1124,75 @@ export default function ChatScreen() {
     setEditingMsg(null);
     setInput("");
     setHistLoading(true);
+    await loadWallpaper(room);
     const hist = await fetchHistory(room);
     setMessages(hist);
     setHistLoading(false);
     if (hist.length > 0) setLastMsgMap((prev) => ({ ...prev, [user.username]: hist[hist.length - 1] }));
   };
 
-  const handleSend = async () => {
-    const text = input.trim();
-    if (!text) return;
+  // ── TEXT MESSAGES ────────────────────────────────────────────────────────
 
-    if (editingMsg) {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === editingMsg.id ? { ...m, message: text, content: text, is_edited: true } : m))
-      );
-      const headers = await authHeader();
-      API.patch(`/messages/message/${editingMsg.id}/`, { content: text }, { headers }).catch(() => {});
-      setEditingMsg(null);
+  const handleSend = async () => {
+    const text = sanitizeText(input.trim());
+    if (!text || sending) return;
+    setSending(true);
+
+    try {
+      if (editingMsg) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === editingMsg.id ? { ...m, message: text, content: text, is_edited: true } : m))
+        );
+        const headers = await authHeader();
+        await API.patch(`/messages/message/${editingMsg.id}/`, { content: text }, { headers }).catch((err) => {
+          console.error("[editMessage] error:", err?.response?.data || err.message);
+        });
+        setEditingMsg(null);
+        setInput("");
+        inputRef.current?.focus();
+        return;
+      }
+
+      const localId = `local_${Date.now()}`;
+      const localMsg = {
+        id: localId, type: MSG_TYPE.TEXT, message: text, content: text,
+        sender: myUsername, sender_username: myUsername,
+        timestamp: new Date().toISOString(), created_at: new Date().toISOString(),
+        _local: true,
+      };
+      setMessages((prev) => [...prev, localMsg]);
+      setLastMsgMap((prev) => ({ ...prev, [activeUser.username]: localMsg }));
       setInput("");
       inputRef.current?.focus();
-      return;
-    }
 
-    const localId = `local_${Date.now()}`;
-    const localMsg = {
-      id: localId, message: text, content: text,
-      sender: myUsername, sender_username: myUsername,
-      timestamp: new Date().toISOString(), created_at: new Date().toISOString(),
-      _local: true,
-    };
-    setMessages((prev) => [...prev, localMsg]);
-    setLastMsgMap((prev) => ({ ...prev, [activeUser.username]: localMsg }));
-    setInput("");
-    inputRef.current?.focus();
-
-    const sent = sendMessage(text);
-    if (!sent) {
-      const headers = await authHeader();
-      API.post(`/messages/message/`, { room: roomName, content: text }, { headers })
-        .then((res) => {
-          setMessages((prev) => prev.map((m) => (m.id === localId ? { ...m, ...res.data, _local: false } : m)));
-          setLastMsgMap((prev) => ({ ...prev, [activeUser.username]: res.data }));
-        })
-        .catch(() => {});
+      const sent = sendMessage(text);
+      if (!sent) {
+        const headers = await authHeader();
+        API.post(`/messages/message/`, { room: roomName, content: text }, { headers })
+          .then((res) => {
+            setMessages((prev) => prev.map((m) => (m.id === localId ? { ...m, ...res.data, _local: false } : m)));
+            setLastMsgMap((prev) => ({ ...prev, [activeUser.username]: res.data }));
+          })
+          .catch((err) => {
+            console.error("[sendMessage:http] error:", err?.response?.data || err.message);
+            setMessages((prev) => prev.map((m) => (m.id === localId ? { ...m, _failed: true } : m)));
+          });
+      }
+    } catch (err) {
+      console.error("[handleSend] error:", err);
+    } finally {
+      setSending(false);
     }
   };
 
   const handleTypingInput = (text) => {
-    setInput(text);
-    clearTimeout(typingRef.current);
+    setInput(text.slice(0, MAX_TEXT_LENGTH));
     if (connected) {
-      sendTyping();
-      typingRef.current = setTimeout(() => {}, 1000);
+      const now = Date.now();
+      if (now - lastTypingSentAt.current > 800) {
+        sendTyping();
+        lastTypingSentAt.current = now;
+      }
     }
   };
 
@@ -601,15 +1204,23 @@ export default function ChatScreen() {
 
   const deleteMsg = async (msgId) => {
     setMessages((prev) => prev.filter((m) => m.id !== msgId));
-    const headers = await authHeader();
-    API.delete(`/messages/message/${msgId}/`, { headers }).catch(() => {});
+    try {
+      const headers = await authHeader();
+      await API.delete(`/messages/message/${msgId}/`, { headers });
+    } catch (err) {
+      console.error("[deleteMsg] error:", err?.response?.data || err.message);
+    }
   };
 
   const clearHistory = async () => {
     setMessages([]);
     if (activeUser) setLastMsgMap((prev) => ({ ...prev, [activeUser.username]: null }));
-    const headers = await authHeader();
-    API.delete(`/messages/history/clear/?room=${roomName}`, { headers }).catch(() => {});
+    try {
+      const headers = await authHeader();
+      await API.delete(`/messages/history/clear/?room=${roomName}`, { headers });
+    } catch (err) {
+      console.error("[clearHistory] error:", err?.response?.data || err.message);
+    }
   };
 
   const refreshChat = async () => {
@@ -631,15 +1242,178 @@ export default function ChatScreen() {
     ? messages.filter((m) => (m.message || m.content || "").toLowerCase().includes(msgSearch.toLowerCase()))
     : messages;
 
-  // ── RENDER: USER LIST ───────────────────────────────────────────────────
+  // ── MEDIA MESSAGES ───────────────────────────────────────────────────────
+
+  const sendMediaMessage = async ({ uri, type, fileName, mimeType, fileSize, duration }) => {
+    if (!roomName || !activeUser || !uri) return;
+
+    const limits = { [MSG_TYPE.IMAGE]: MAX_IMAGE_BYTES, [MSG_TYPE.VIDEO]: MAX_VIDEO_BYTES, [MSG_TYPE.AUDIO]: MAX_AUDIO_BYTES, [MSG_TYPE.VOICE]: MAX_AUDIO_BYTES };
+    if (fileSize && limits[type] && fileSize > limits[type]) {
+      Alert.alert("Fayl juda katta", `Maksimal hajm: ${formatFileSize(limits[type])}`);
+      return;
+    }
+
+    const localId = `local_${Date.now()}`;
+    const localMsg = {
+      id: localId, type, media_url: uri, file_name: fileName, mime_type: mimeType,
+      file_size: fileSize, duration, sender: myUsername, sender_username: myUsername,
+      timestamp: new Date().toISOString(), created_at: new Date().toISOString(),
+      _local: true, _uploading: true,
+    };
+    setMessages((prev) => [...prev, localMsg]);
+    setLastMsgMap((prev) => ({ ...prev, [activeUser.username]: localMsg }));
+
+    try {
+      const headers = await authHeader();
+      const form = new FormData();
+      form.append("room", roomName);
+      form.append("type", type);
+      if (fileName) form.append("file_name", fileName);
+      if (duration) form.append("duration", String(duration));
+      form.append("file", { uri, name: fileName || `${type}_${Date.now()}`, type: mimeType || "application/octet-stream" });
+
+      const res = await API.post(`/messages/message/`, form, {
+        headers: { ...headers, "Content-Type": "multipart/form-data" },
+      });
+
+      setMessages((prev) => prev.map((m) => (m.id === localId ? { ...m, ...res.data, type, _local: false, _uploading: false } : m)));
+      setLastMsgMap((prev) => ({ ...prev, [activeUser.username]: { ...res.data, type } }));
+    } catch (err) {
+      console.error(`[sendMediaMessage:${type}] error:`, err?.response?.data || err.message);
+      setMessages((prev) => prev.map((m) => (m.id === localId ? { ...m, _uploading: false, _failed: true } : m)));
+      Alert.alert("Xatolik", "Faylni yuborishda xatolik yuz berdi. Qayta urinib ko'ring.");
+    }
+  };
+
+  const pickAndSendImage = async () => {
+    try {
+      const ok = await ensureMediaLibraryPermission();
+      if (!ok) return;
+      const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7 });
+      if (res.canceled) return;
+      const asset = res.assets?.[0];
+      if (!asset) return;
+      await sendMediaMessage({
+        uri: asset.uri, type: MSG_TYPE.IMAGE,
+        fileName: asset.fileName || "image.jpg", mimeType: asset.mimeType || "image/jpeg", fileSize: asset.fileSize,
+      });
+    } catch (err) {
+      console.error("[pickAndSendImage] error:", err);
+    }
+  };
+
+  const pickAndSendVideo = async () => {
+    try {
+      const ok = await ensureMediaLibraryPermission();
+      if (!ok) return;
+      const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Videos, quality: 0.7 });
+      if (res.canceled) return;
+      const asset = res.assets?.[0];
+      if (!asset) return;
+      await sendMediaMessage({
+        uri: asset.uri, type: MSG_TYPE.VIDEO,
+        fileName: asset.fileName || "video.mp4", mimeType: asset.mimeType || "video/mp4",
+        fileSize: asset.fileSize, duration: asset.duration ? asset.duration * 1000 : null,
+      });
+    } catch (err) {
+      console.error("[pickAndSendVideo] error:", err);
+    }
+  };
+
+  const openCameraAndSend = async () => {
+    try {
+      const ok = await ensureCameraPermission();
+      if (!ok) return;
+      const res = await ImagePicker.launchCameraAsync({ quality: 0.7 });
+      if (res.canceled) return;
+      const asset = res.assets?.[0];
+      if (!asset) return;
+      const isVideo = asset.type === "video";
+      await sendMediaMessage({
+        uri: asset.uri, type: isVideo ? MSG_TYPE.VIDEO : MSG_TYPE.IMAGE,
+        fileName: isVideo ? "video.mp4" : "photo.jpg", mimeType: isVideo ? "video/mp4" : "image/jpeg",
+        fileSize: asset.fileSize, duration: asset.duration ? asset.duration * 1000 : null,
+      });
+    } catch (err) {
+      console.error("[openCameraAndSend] error:", err);
+    }
+  };
+
+  const pickAndSendDocument = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({ type: ["audio/*"], copyToCacheDirectory: true });
+      if (res.canceled) return;
+      const asset = res.assets?.[0];
+      if (!asset) return;
+      await sendMediaMessage({
+        uri: asset.uri, type: MSG_TYPE.AUDIO,
+        fileName: asset.name, mimeType: asset.mimeType || "audio/mpeg", fileSize: asset.size,
+      });
+    } catch (err) {
+      console.error("[pickAndSendDocument] error:", err);
+    }
+  };
+
+  const handleVoicePressIn = async () => {
+    await recorder.start();
+  };
+  const handleVoicePressOut = async () => {
+    const result = await recorder.stop();
+    if (result?.uri && result.duration >= MIN_VOICE_MS) {
+      await sendMediaMessage({ uri: result.uri, type: MSG_TYPE.VOICE, duration: result.duration, fileName: "voice.m4a", mimeType: "audio/m4a" });
+    }
+  };
+
+  // ── WALLPAPER ────────────────────────────────────────────────────────────
+
+  const applyWallpaperGradient = async (colors) => {
+    const wp = { type: "gradient", colors };
+    setWallpaper(wp);
+    try {
+      await AsyncStorage.setItem(`wallpaper_${roomName}`, JSON.stringify(wp));
+    } catch (err) {
+      console.error("[wallpaper] save gradient error:", err);
+    }
+  };
+
+  const applyWallpaperCustom = async () => {
+    try {
+      const ok = await ensureMediaLibraryPermission();
+      if (!ok) return;
+      const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
+      if (res.canceled) return;
+      const uri = res.assets?.[0]?.uri;
+      if (!uri) return;
+      const wp = { type: "image", uri };
+      setWallpaper(wp);
+      await AsyncStorage.setItem(`wallpaper_${roomName}`, JSON.stringify(wp));
+    } catch (err) {
+      console.error("[wallpaper] custom error:", err);
+    }
+  };
+
+  const resetWallpaper = async () => {
+    setWallpaper(null);
+    try {
+      await AsyncStorage.removeItem(`wallpaper_${roomName}`);
+    } catch (err) {
+      console.error("[wallpaper] reset error:", err);
+    }
+  };
+
+  // ── RENDER: USER LIST ────────────────────────────────────────────────────
 
   const renderUserRow = ({ item: u }) => {
     const isActive = activeUser?.username === u.username;
     const online = isOnline(u.username);
     const lastMsg = lastMsgMap[u.username];
-    const lastText = lastMsg ? lastMsg.message || lastMsg.content || "" : null;
+    const lastIsMedia = lastMsg && lastMsg.type && lastMsg.type !== MSG_TYPE.TEXT;
+    const mediaLabel = { image: "📷 Rasm", video: "🎥 Video", audio: "🎵 Audio", voice: "🎤 Ovozli xabar" }[lastMsg?.type];
+    const lastText = lastMsg ? (lastIsMedia ? mediaLabel : lastMsg.message || lastMsg.content || "") : null;
     const lastTime = lastMsg ? timeOnly(lastMsg.timestamp || lastMsg.created_at) : null;
     const isLastMine = lastMsg && (lastMsg.sender === myUsername || lastMsg.sender_username === myUsername);
+    const isUnread = lastMsg && !isLastMine && !lastMsg.is_read;
+    const isTyping = typing[roomName] && typing[roomName].includes(u.username);
 
     return (
       <TouchableOpacity
@@ -658,7 +1432,14 @@ export default function ChatScreen() {
             <Text style={[styles.userName, { color: t.text }]} numberOfLines={1}>
               {u.full_name || u.username}
             </Text>
-            {lastTime ? <Text style={{ fontSize: 11, color: t.sub }}>{lastTime}</Text> : null}
+            {isTyping ? (
+              <Text style={{ fontSize: 11, color: t.accent, fontStyle: "italic" }}>Typing...</Text>
+            ) : typing[roomName] && typing[roomName].includes(u.username) ? (
+              <Text style={{ fontSize: 11, color: t.accent, fontStyle: "italic" }}>Typing...</Text>
+            ) : isUnread ? (
+              <View style={styles.unreadDot} />
+            ) : null}
+            {lastTime ? <Text style={{ fontSize: 11, color: t.sub }}>{lastTime}</Text> : null} 
           </View>
           {lastText ? (
             <Text style={[styles.userSub, { color: t.sub }]} numberOfLines={1}>
@@ -678,8 +1459,50 @@ export default function ChatScreen() {
 
   // ── RENDER: MESSAGE BUBBLE ───────────────────────────────────────────────
 
+  const renderMessageContent = (msg, isMe) => {
+    switch (msg.type) {
+      case MSG_TYPE.IMAGE:
+        return (
+          <TouchableOpacity onPress={() => setViewerImageUri(msg.media_url)} activeOpacity={0.9}>
+            <Image source={{ uri: msg.media_url }} style={styles.imageBubbleImg} />
+            {msg._uploading ? (
+              <View style={styles.uploadOverlay}>
+                <ActivityIndicator color="#fff" />
+              </View>
+            ) : null}
+          </TouchableOpacity>
+        );
+      case MSG_TYPE.VIDEO:
+        return <VideoMessageBubble uri={msg.media_url} onPress={() => setViewerVideoUri(msg.media_url)} />;
+      case MSG_TYPE.VOICE:
+        return <AudioMessageBubble uri={msg.media_url} duration={msg.duration} isMe={isMe} theme={t} label="Ovozli xabar" />;
+      case MSG_TYPE.AUDIO:
+        return <AudioMessageBubble uri={msg.media_url} duration={msg.duration} isMe={isMe} theme={t} label={msg.file_name} />;
+      case MSG_TYPE.FILE:
+        return (
+          <FileMessageBubble
+            fileName={msg.file_name}
+            fileSize={msg.file_size}
+            isMe={isMe}
+            theme={t}
+            onOpen={() => msg.media_url && Linking.openURL(msg.media_url).catch((e) => console.error("[openFile] error:", e))}
+          />
+        );
+      default:
+        return (
+          <Text style={{ color: isMe ? t.textMe : t.text, fontSize: 14, lineHeight: 20 }}>
+            {msg.message || msg.content || ""}
+            {(msg.edited || msg.is_edited) ? <Text style={{ fontSize: 10, opacity: 0.6 }}>  edited</Text> : null}
+            {msg._local ? <Text style={{ fontSize: 10, opacity: 0.6 }}>  ⏳</Text> : null}
+            {msg._failed ? <Text style={{ fontSize: 10, color: "#EF4444" }}>  ✕ yuborilmadi</Text> : null}
+          </Text>
+        );
+    }
+  };
+
   const renderMessage = ({ item: msg, index: i }) => {
     const isMe = msg.sender === myUsername || msg.sender_username === myUsername;
+    const isMedia = msg.type === MSG_TYPE.IMAGE || msg.type === MSG_TYPE.VIDEO;
     const prev = filteredMessages[i - 1];
     const next = filteredMessages[i + 1];
     const prevSender = prev?.sender || prev?.sender_username;
@@ -707,24 +1530,20 @@ export default function ChatScreen() {
             onLongPress={() => setMsgMenuFor(msg)}
             activeOpacity={0.85}
             style={[
-              styles.bubble,
+              isMedia ? styles.bubbleMedia : styles.bubble,
               bubbleRadius,
               {
-                backgroundColor: isMe ? t.bubbleMe : t.bubbleOther,
-                opacity: msg._local ? 0.7 : 1,
+                backgroundColor: isMedia ? "transparent" : (isMe ? t.bubbleMe : t.bubbleOther),
+                opacity: msg._local && !msg._failed ? 0.85 : 1,
               },
             ]}
           >
-            <Text style={{ color: isMe ? t.textMe : t.text, fontSize: 14, lineHeight: 20 }}>
-              {msg.message || msg.content || ""}
-              {(msg.edited || msg.is_edited) ? <Text style={{ fontSize: 10, opacity: 0.6 }}>  edited</Text> : null}
-              {msg._local ? <Text style={{ fontSize: 10, opacity: 0.6 }}>  ⏳</Text> : null}
-            </Text>
+            {renderMessageContent(msg, isMe)}
           </TouchableOpacity>
           {showBot ? (
             <Text style={[styles.msgTime, { color: t.sub, textAlign: isMe ? "right" : "left" }]}>
               {timeOnly(msg.timestamp || msg.created_at)}
-              {msg._local ? <Text style={{ color: "#F59E0B" }}> · sending</Text> : null}
+              {msg._local && !msg._failed ? <Text style={{ color: "#F59E0B" }}> · sending</Text> : null}
             </Text>
           ) : null}
         </View>
@@ -736,14 +1555,16 @@ export default function ChatScreen() {
     { href: "/pages/home", active: false, Icon: IconHome },
     { href: "/pages/message", active: true, Icon: IconLogoGlobe },
     { href: "/pages/createPost", active: false, Icon: IconCreate, isCenter: true },
-    { href: "/pages/movie", active: false, Icon: IconMovie },
+    { href: "/pages/reals", active: false, Icon: IconMovie },
     { href: "/pages/profile", active: false, Icon: IconPerson },
   ];
 
   const msgMenuItems = msgMenuFor
     ? (msgMenuFor.sender === myUsername || msgMenuFor.sender_username === myUsername
         ? [
-            { label: "Edit", icon: <IconEdit color={t.text} />, action: () => startEdit(msgMenuFor) },
+            ...(msgMenuFor.type === MSG_TYPE.TEXT || !msgMenuFor.type
+              ? [{ label: "Edit", icon: <IconEdit color={t.text} />, action: () => startEdit(msgMenuFor) }]
+              : []),
             { label: "Delete", icon: <IconTrash color="#EF4444" />, action: () => deleteMsg(msgMenuFor.id), danger: true },
           ]
         : [
@@ -762,12 +1583,32 @@ export default function ChatScreen() {
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: t.bg }]}>
       <DropMenu visible={headerMenuVisible} onClose={() => setHeaderMenuVisible(false)} theme={t} items={[
+        { label: "Suhbat foni", icon: <IconPalette color={t.text} />, action: () => setWallpaperSheetVisible(true) },
         { label: "Refresh chat", icon: <IconRefresh color={t.text} />, action: refreshChat },
         { label: "Clear history", icon: <IconTrash color="#EF4444" />, action: clearHistory, danger: true },
         { label: "Close chat", icon: <IconClose color={t.text} />, action: () => { setView("list"); setActiveUser(null); setRoomName(null); setMessages([]); } },
         { label: dark ? "Light mode" : "Dark mode", icon: dark ? <IconSun color={t.text} /> : <IconMoon color={t.text} />, action: () => setDark((d) => !d) },
       ]} />
       <DropMenu visible={!!msgMenuFor} onClose={() => setMsgMenuFor(null)} theme={t} items={msgMenuItems} />
+      <AttachSheet
+        visible={attachSheetVisible}
+        onClose={() => setAttachSheetVisible(false)}
+        theme={t}
+        onPickImage={pickAndSendImage}
+        onPickVideo={pickAndSendVideo}
+        onPickDocument={pickAndSendDocument}
+        onOpenCamera={openCameraAndSend}
+      />
+      <WallpaperSheet
+        visible={wallpaperSheetVisible}
+        onClose={() => setWallpaperSheetVisible(false)}
+        theme={t}
+        onSelectGradient={applyWallpaperGradient}
+        onSelectCustom={applyWallpaperCustom}
+        onReset={resetWallpaper}
+      />
+      <ImageViewerModal uri={viewerImageUri} visible={!!viewerImageUri} onClose={() => setViewerImageUri(null)} />
+      <VideoViewerModal uri={viewerVideoUri} visible={!!viewerVideoUri} onClose={() => setViewerVideoUri(null)} />
 
       {/* ── LIST VIEW ── */}
       {view === "list" ? (
@@ -826,19 +1667,19 @@ export default function ChatScreen() {
           {/* Bottom nav */}
           <View style={[styles.bottomNav, { backgroundColor: t.surface, borderTopColor: t.border }]}>
             {navItems.map((item, i) => (
-            <TouchableOpacity
-                key={i}
-                onPress={() => router.push(item.href)}
-                style={styles.navItem}
-                >
+              <TouchableOpacity key={i} onPress={() => router.push(item.href)} style={styles.navItem}>
                 <item.Icon color={item.active ? t.accent : t.sub} />
-            </TouchableOpacity>
+              </TouchableOpacity>
             ))}
           </View>
         </>
       ) : (
         /* ── CHAT VIEW ── */
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 15}
+        >
           {!activeUser ? (
             <View style={styles.centerFlex}>
               <View style={[styles.emptyIconCircle, { backgroundColor: t.card }]}>
@@ -910,42 +1751,54 @@ export default function ChatScreen() {
                 </View>
               ) : null}
 
-              {/* Messages */}
-              {histLoading ? (
-                <View style={styles.centerFlex}>
-                  <ActivityIndicator size="large" color={t.accent} />
-                </View>
-              ) : (
-                <FlatList
-                  ref={flatListRef}
-                  data={filteredMessages}
-                  keyExtractor={(item, i) => String(item.id || i)}
-                  renderItem={renderMessage}
-                  contentContainerStyle={{ padding: 14, paddingBottom: 8, flexGrow: 1 }}
-                  ListEmptyComponent={
-                    <View style={[styles.emptyState, { marginTop: 60 }]}>
-                      <View style={[styles.emptyIconCircle, { backgroundColor: t.card }]}>
-                        <IconChatBubble size={28} color={t.sub} />
-                      </View>
-                      <Text style={{ color: t.sub, fontSize: 14 }}>
-                        {msgSearch ? "No messages found" : "Send the first message!"}
-                      </Text>
-                    </View>
-                  }
-                  ListFooterComponent={
-                    typing ? (
-                      <View style={[styles.msgRow, { marginTop: 8 }]}>
-                        <Avatar name={activeUser.username} size={28} />
-                        <View style={[styles.typingBubble, { backgroundColor: t.bubbleOther }]}>
-                          {[0, 1, 2].map((d) => (
-                            <TypingDot key={d} delay={d * 180} color={t.sub} />
-                          ))}
+              {/* Messages + wallpaper */}
+              <View style={{ flex: 1 }}>
+                {wallpaper?.type === "gradient" ? (
+                  <LinearGradient colors={wallpaper.colors} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
+                ) : wallpaper?.type === "image" ? (
+                  <ImageBackground source={{ uri: wallpaper.uri }} style={StyleSheet.absoluteFill} resizeMode="cover">
+                    <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.18)" }]} />
+                  </ImageBackground>
+                ) : (
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: t.bg }]} />
+                )}
+
+                {histLoading ? (
+                  <View style={styles.centerFlex}>
+                    <ActivityIndicator size="large" color={t.accent} />
+                  </View>
+                ) : (
+                  <FlatList
+                    ref={flatListRef}
+                    data={filteredMessages}
+                    keyExtractor={(item, i) => String(item.id || i)}
+                    renderItem={renderMessage}
+                    contentContainerStyle={{ padding: 14, paddingBottom: 8, flexGrow: 1 }}
+                    style={{ backgroundColor: "transparent" }}
+                    ListEmptyComponent={
+                      <View style={[styles.emptyState, { marginTop: 60 }]}>
+                        <View style={[styles.emptyIconCircle, { backgroundColor: t.card }]}>
+                          <IconChatBubble size={28} color={t.sub} />
                         </View>
+                        <Text style={{ color: t.sub, fontSize: 14 }}>
+                          {msgSearch ? "No messages found" : "Send the first message!"}
+                        </Text>
                       </View>
-                    ) : null
-                  }
-                />
-              )}
+                    }
+                    ListFooterComponent={
+                      typing ? (
+                        <View style={[styles.msgRow, { marginTop: 8 }]}>
+                          <View style={[styles.typingBubble, { backgroundColor: t.bubbleOther }]}>
+                            {[0, 1, 2].map((d) => (
+                              <TypingDot key={d} delay={d * 180} color={t.sub} />
+                            ))}
+                          </View>
+                        </View>
+                      ) : null
+                    }
+                  />
+                )}
+              </View>
 
               {/* Input area */}
               <View style={[styles.inputArea, { backgroundColor: t.surface, borderTopColor: t.border }]}>
@@ -975,24 +1828,49 @@ export default function ChatScreen() {
                   </View>
                 ) : null}
 
-                <View style={[styles.inputWrap, { backgroundColor: t.inputBg, borderColor: editingMsg ? t.accent : t.border }]}>
-                  <TextInput
-                    ref={inputRef}
-                    value={input}
-                    onChangeText={handleTypingInput}
-                    placeholder={editingMsg ? "Enter new text..." : `Message @${activeUser.username}...`}
-                    placeholderTextColor={t.sub}
-                    multiline
-                    style={[styles.msgInput, { color: t.text }]}
-                  />
-                  <TouchableOpacity
-                    onPress={handleSend}
-                    disabled={!input.trim()}
-                    style={[styles.sendBtn, { backgroundColor: input.trim() ? t.accent : t.border }]}
-                  >
-                    {editingMsg ? <IconCheck /> : <IconSend />}
-                  </TouchableOpacity>
-                </View>
+                {recorder.isRecording ? (
+                  <View style={[styles.recordingRow, { backgroundColor: t.inputBg, borderColor: "#EF4444" }]}>
+                    <View style={styles.recDot} />
+                    <Text style={{ color: t.text, fontSize: 13, fontWeight: "700" }}>{formatDuration(recorder.durationMs)}</Text>
+                    <Text style={{ color: t.sub, fontSize: 12, flex: 1, marginLeft: 8 }}>Ovozli xabar yozilmoqda...</Text>
+                    <TouchableOpacity onPress={() => recorder.cancel()} style={styles.recCancelBtn}>
+                      <IconTrash color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={[styles.inputWrap, { backgroundColor: t.inputBg, borderColor: editingMsg ? t.accent : t.border }]}>
+                    <TouchableOpacity onPress={() => setAttachSheetVisible(true)} style={styles.attachBtn}>
+                      <IconPaperclip color={t.sub} />
+                    </TouchableOpacity>
+                    <TextInput
+                      ref={inputRef}
+                      value={input}
+                      onChangeText={handleTypingInput}
+                      placeholder={editingMsg ? "Enter new text..." : `Message @${activeUser.username}...`}
+                      placeholderTextColor={t.sub}
+                      multiline
+                      maxLength={MAX_TEXT_LENGTH}
+                      style={[styles.msgInput, { color: t.text }]}
+                    />
+                    {input.trim() ? (
+                      <TouchableOpacity
+                        onPress={handleSend}
+                        disabled={sending}
+                        style={[styles.sendBtn, { backgroundColor: t.accent, opacity: sending ? 0.6 : 1 }]}
+                      >
+                        {editingMsg ? <IconCheck /> : <IconSend />}
+                      </TouchableOpacity>
+                    ) : (
+                      <Pressable
+                        onPressIn={handleVoicePressIn}
+                        onPressOut={handleVoicePressOut}
+                        style={[styles.sendBtn, { backgroundColor: t.accent }]}
+                      >
+                        <IconMic />
+                      </Pressable>
+                    )}
+                  </View>
+                )}
               </View>
             </>
           )}
@@ -1031,6 +1909,44 @@ function TypingDot({ delay = 0, color = "#6B7280" }) {
         marginHorizontal: 2, transform: [{ translateY }],
       }}
     />
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  ERROR BOUNDARY — catches unexpected render errors and logs them to console
+// ════════════════════════════════════════════════════════════════════════════
+
+class ChatErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error, info) {
+    console.error("[ChatScreen] Uncaught render error:", error, info?.componentStack);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <SafeAreaView style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24, backgroundColor: "#F3F5FC" }}>
+          <Text style={{ fontSize: 16, fontWeight: "700", marginBottom: 8, color: "#111827" }}>Nimadir xato ketdi</Text>
+          <Text style={{ fontSize: 13, color: "#6B7280", textAlign: "center" }}>
+            Chat ekranida kutilmagan xatolik yuz berdi. Iltimos ilovani qayta oching. Batafsil ma'lumot terminalda ko'rsatildi.
+          </Text>
+        </SafeAreaView>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default function ChatScreen() {
+  return (
+    <ChatErrorBoundary>
+      <ChatScreenInner />
+    </ChatErrorBoundary>
   );
 }
 
@@ -1075,11 +1991,36 @@ const styles = StyleSheet.create({
   bubbleWrap: { maxWidth: "75%" },
   senderLabel: { fontSize: 10, fontWeight: "600", marginBottom: 3, marginLeft: 3 },
   bubble: { paddingHorizontal: 14, paddingVertical: 9 },
+  bubbleMedia: { padding: 3, overflow: "hidden" },
   msgTime: { fontSize: 10, marginTop: 3, marginHorizontal: 3, fontWeight: "500" },
   typingBubble: {
     flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12,
-    borderRadius: 18, marginLeft: 6,
+    borderRadius: 18, marginLeft: 40,
   },
+
+  // Media bubbles
+  imageBubbleImg: { width: SCREEN_W * 0.55, height: SCREEN_W * 0.55, borderRadius: 16 },
+  videoBubble: { width: SCREEN_W * 0.55, height: SCREEN_W * 0.55, borderRadius: 16, backgroundColor: "#000" },
+  videoPlayOverlay: {
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+    alignItems: "center", justifyContent: "center",
+  },
+  uploadOverlay: {
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.35)", alignItems: "center", justifyContent: "center", borderRadius: 16,
+  },
+  audioBubbleRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 10, minWidth: 190, maxWidth: 240 },
+  audioPlayBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", marginRight: 10 },
+  waveRow: { flexDirection: "row", alignItems: "center", gap: 2, marginTop: 3, height: 16 },
+  waveBar: { width: 2.5, borderRadius: 2 },
+  fileBubbleRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 10, minWidth: 190, maxWidth: 240 },
+  filesIconWrap: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", marginRight: 10 },
+
+  // Fullscreen viewers
+  viewerOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.92)", alignItems: "center", justifyContent: "center" },
+  viewerCloseBtn: { position: "absolute", top: 50, right: 20, zIndex: 10, padding: 10 },
+  viewerImage: { width: SCREEN_W, height: "80%" },
+  viewerVideo: { width: SCREEN_W, height: "60%" },
 
   // Input area
   inputArea: { padding: 10, paddingHorizontal: 14, paddingBottom: 20, borderTopWidth: 1, gap: 8 },
@@ -1087,13 +2028,37 @@ const styles = StyleSheet.create({
   offlineBar: { flexDirection: "row", alignItems: "center", padding: 8, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1 },
   inputWrap: {
     flexDirection: "row", alignItems: "flex-end", gap: 8,
-    borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1.5,
+    borderRadius: 18, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1.5,
   },
+  attachBtn: { width: 30, height: 36, alignItems: "center", justifyContent: "center" },
   msgInput: { flex: 1, fontSize: 14, maxHeight: 100, paddingTop: 4 },
   sendBtn: { width: 36, height: 36, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  recordingRow: { flexDirection: "row", alignItems: "center", padding: 10, paddingHorizontal: 14, borderRadius: 18, borderWidth: 1.5, gap: 8 },
+  recDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: "#EF4444" },
+  recCancelBtn: { padding: 6 },
 
   // Dropdown menu
   dropOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" },
   dropMenuCard: { width: 200, borderRadius: 14, borderWidth: 1, overflow: "hidden" },
   dropMenuItem: { flexDirection: "row", alignItems: "center", paddingVertical: 12, paddingHorizontal: 16 },
+
+  // Bottom sheets (attach / wallpaper)
+  sheetOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
+  sheetCard: { borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 20, paddingTop: 10 },
+  sheetHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 14 },
+  sheetGrid: { flexDirection: "row", flexWrap: "wrap", gap: 18 },
+  sheetItem: { width: (SCREEN_W - 40 - 54) / 4, alignItems: "center" },
+  sheetIconCircle: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center" },
+
+  wallpaperCard: { borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 20, paddingTop: 10, paddingBottom: 30 },
+  catTabsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
+  catTab: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
+  wallGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 16 },
+  wallSwatchWrap: { width: (SCREEN_W - 40 - 36) / 4, height: 70, borderRadius: 14, overflow: "hidden" },
+  wallSwatch: { width: "100%", height: "100%" },
+  resetWallBtn: { padding: 14, borderRadius: 12, borderWidth: 1, alignItems: "center", marginBottom: 16 },
+  customWallBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    padding: 14, borderRadius: 12, borderWidth: 1.5, borderStyle: "dashed",
+  },
 });

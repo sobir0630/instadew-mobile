@@ -672,7 +672,7 @@ export default function FeedScreen() {
     { href: "/pages/home", active: true, Icon: IconHome },
     { href: "/pages/message", active: false, Icon: IconLogoGlobe },
     { href: "/pages/createPost", active: false, Icon: IconCreate, isCenter: true },
-    { href: "/pages/movie", active: false, Icon: IconMovie },
+    { href: "/pages/reals", active: false, Icon: IconMovie },
     { href: "/pages/profile", active: false, Icon: IconPerson },
   ];
 

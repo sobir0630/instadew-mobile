@@ -648,7 +648,7 @@ export default function CreatePostScreen() {
         if (location) fd.append("location", location);
         if (hashtags.length) fd.append("tags", hashtags.join(","));
 
-        const res = await API.post("/videos/videos/", fd, {
+        const res = await API.post("/videos/video/", fd, {
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "multipart/form-data" },
         });
         console.log("VIDEO SUCCESS:", res.data);
