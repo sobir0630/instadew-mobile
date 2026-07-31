@@ -638,7 +638,7 @@ export default function ProfileScreen() {
       const id = await AsyncStorage.getItem("user_id");
       if (!token || !id) return;
       // Saqlanganlar uchun alohida endpoint: /save/my-save{id}/
-      const res = await API.get(`/save/my-save${id}/`, {
+      const res = await API.get(`/save/my-save/${id}/`, {
         headers: { Authorization: `Bearer ${token.trim()}` },
       });
       if (res.status === 200) {
@@ -697,7 +697,7 @@ export default function ProfileScreen() {
         <Text style={styles.headerTitle} numberOfLines={1}>
           {loading ? "" : full_name}
         </Text>
-        <TouchableOpacity onPress={() => router.push("/settings")} style={styles.settingsBtn}>
+        <TouchableOpacity onPress={() => router.push("/utils/settings")} style={styles.settingsBtn}>
           <IconSettings />
         </TouchableOpacity>
       </View>
@@ -740,13 +740,13 @@ export default function ProfileScreen() {
 
           <View style={{ flexDirection: "row", gap: 8, marginBottom: 20 }}>
             <TouchableOpacity
-              onPress={() => router.push("/edit-profile")}
+              onPress={() => router.push("./profile/editProfile")}
               style={styles.editProfileBtn}
             >
               <Text style={styles.editProfileBtnText}>Edit Profile</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => router.push("/post-views")}
+              onPress={() => router.push("./utils/myPosts")}
               style={styles.editPostsBtn}
             >
               <Text style={styles.editPostsBtnText}>Edit Posts</Text>

@@ -122,7 +122,7 @@ export function buildRoomName(u1, u2) {
 }
 
 function wsBase() {
-  const base = WS_URLs || "ws://10.59.78.111:8000";
+  const base = "ws://10.221.37.213:8001";
   return base.endsWith("/") ? base.slice(0, -1) : base;
 }
 
@@ -1049,7 +1049,7 @@ function ChatScreenInner() {
     const tryConnect = () => {
       try {
         ws = new WebSocket(`${wsBase()}/ws/presence/`);
-        ws.onopen = () => console.log("[presence-ws] connected");
+        ws.onopen = () => console.log("[presence-ws] connected - ws host:", wsBase());
         ws.onmessage = (e) => {
           try {
             const d = JSON.parse(e.data);

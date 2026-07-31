@@ -20,6 +20,12 @@ import Svg, { Circle, Path, Rect, Polyline, Line } from "react-native-svg";
 import { ReactNode } from 'react';
 import { Redirect } from 'expo-router';
 
+import * as Device from "expo-device";
+import * as Application from "expo-application";
+import Constants from "expo-constants";
+
+
+
 // ════════════════════════════════════════════════════════════════════════════
 //  SVG ICONS
 // ════════════════════════════════════════════════════════════════════════════
@@ -195,6 +201,140 @@ export default function LoginScreen() {
   const [error,    setError]    = useState("");
   const [loading,  setLoading]  = useState(false);
 
+
+
+  const getDeviceType = () => {
+      switch (Device.deviceType) {
+        case Device.DeviceType.PHONE:
+          return "mobile";
+        case Device.DeviceType.TABLET:
+          return "tablet";
+        default:
+          return "desktop";
+      }
+    };
+
+    const getSessionData = async () => {
+
+        // ip malumotlarini olish
+        const getPublicIP = async () => {
+          try {
+            const response = await fetch("https://api.ipify.org?format=json");
+            const data = await response.json();
+
+            if (data.status === 200) {
+              AsyncStorage.setItem("IP_address", data.ip)
+            }
+            console.log("Public IP:", data.ip);
+
+            return data.ip;
+          } catch (error) {
+            console.log("IP olishda xatolik:", error);
+            return null;
+          }
+        };
+
+        // browserdan login bulsa uni malumotlarini olish
+        const getBrowserInfo = () => {
+          if (Platform.OS !== "web") {
+            return {
+              browser: null,
+              browser_version: null,
+            };
+          }
+
+          const ua = navigator.userAgent;
+
+          let browser = "Unknown";
+          let browser_version = "";
+
+          if (ua.includes("Firefox")) {
+            browser = "Firefox";
+            browser_version = ua.match(/Firefox\/([\d.]+)/)?.[1] || "";
+          } else if (ua.includes("Edg")) {
+            browser = "Microsoft Edge";
+            browser_version = ua.match(/Edg\/([\d.]+)/)?.[1] || "";
+          } else if (ua.includes("OPR") || ua.includes("Opera")) {
+            browser = "Opera";
+            browser_version =
+              ua.match(/OPR\/([\d.]+)/)?.[1] ||
+              ua.match(/Opera\/([\d.]+)/)?.[1] ||
+              "";
+          } else if (
+            ua.includes("Chrome") &&
+            !ua.includes("Edg") &&
+            !ua.includes("OPR")
+          ) {
+            browser = "Chrome";
+            browser_version = ua.match(/Chrome\/([\d.]+)/)?.[1] || "";
+          } else if (
+            ua.includes("Safari") &&
+            !ua.includes("Chrome")
+          ) {
+            browser = "Safari";
+            browser_version = ua.match(/Version\/([\d.]+)/)?.[1] || "";
+          }
+
+          return {
+            browser,
+            browser_version,
+          };
+        };
+
+        // malumot joylash
+        const ip_addrr = await getPublicIP()
+        const refresh = await AsyncStorage.getItem("refresh")
+        console.log("refresh:", refresh)
+
+        // browser
+        const browserInfo = getBrowserInfo()
+
+
+
+        const getDeviceId = async () => {
+          if (Platform.OS === "android") {
+            const androidId = Application.getAndroidId();
+
+            return androidId;
+          }
+
+          if (Platform.OS === "ios") {
+            const iosId = await Application.getIosIdForVendorAsync();
+
+            return iosId;
+          }
+
+          return null;
+        };
+
+        const ids = await getDeviceId()
+
+      return {
+      
+        refresh: refresh,
+        device_id: ids,
+
+        device_name: Device.deviceName || "Unknown Device",
+        device_type: getDeviceType(),
+        platform: Platform.OS,
+
+        browser: browserInfo.browser,
+        browser_version: browserInfo.browser_version,
+        
+        ip_address: ip_addrr,
+        user_agent: Platform.OS === "web" ? navigator.userAgent : "InstaDew app",
+                
+        app_version:
+          Application.nativeApplicationVersion || "1.0.0",
+        
+        expires_at: "",
+        is_active: true,
+        is_this_deviace: true,
+
+      };
+    };
+
+    
   const handleLogin = async () => {
     setError("");
 
@@ -205,15 +345,41 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
+      const session = await getSessionData();
+
       const response = await api.post("users/login/login/", {
         username: username.trim(),
         password,
+
+        device_id: session.device_id,
+        device_name: session.device_name,
+        device_type: session.device_type,
+        platform: session.platform,
+        browser: session.browser,
+        browser_version: session.browser_version,
+        ip_address: session.ip_address,
+        user_agent: session.user_agent || "Instadew_app",
+        app_version: session.app_version,
+        expires_at: session.expires_at,
+        is_active: session.is_active,
       });
+
 
       await AsyncStorage.setItem("token",          response.data.access);
       await AsyncStorage.setItem("refresh",        response.data.refresh);
       await AsyncStorage.setItem("user_id",        String(response.data.user_id));
       await AsyncStorage.setItem("login_username", response.data.username);
+      await AsyncStorage.setItem("username",       response.data.username);
+      
+      await api.post(
+          "/session/session/session/",
+          session,
+          {
+              headers: {
+                  Authorization: `Bearer ${response.data.access}`,
+              },
+          }
+      );
 
       if (response.status === 200) {
         router.push("/pages/home");
