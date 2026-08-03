@@ -390,7 +390,7 @@ export default function MyPostsPage() {
                     ? "Hali hech qanday rasm posti qo'shmadingiz"
                     : "Hali hech qanday video posti qo'shmadingiz"}
                 </Text>
-                <TouchableOpacity onPress={() => navigation.navigate("CreatePost")} style={styles.createBtn}>
+                <TouchableOpacity onPress={() => router.push("../createPost")} style={styles.createBtn}>
                   <Plus size={16} color="#fff" strokeWidth={2.5} />
                   <Text style={styles.createBtnText}>Post qo'shish</Text>
                 </TouchableOpacity>
