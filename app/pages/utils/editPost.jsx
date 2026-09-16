@@ -53,6 +53,7 @@ import {
   Trash2,
   Save,
 } from "lucide-react-native";
+import { router } from "expo-router";
 import API from "../../api/server";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -447,7 +448,7 @@ export default function EditPost() {
       setShowDelete(false);
       setToast({ message: "Post o'chirildi!", type: "success" });
       setTimeout(() => {
-        navigation.navigate("Person");
+        router.push("../profile");
       }, 1200);
     } catch (err) {
       console.error("Delete error:", err);

@@ -1092,10 +1092,10 @@ export default function UserProfileScreen() {
   }
 
   const navItems = [
-    { href: "/pages/home", active: false, Icon: IconHome },
+    { href: "/pages/home/FeedScreen", active: false, Icon: IconHome },
     { href: "/pages/message", active: false, Icon: IconLogoGlobe },
-    { href: "/pages/createPost", active: false, Icon: IconCreate },
-    { href: "/pages/reals", active: false, Icon: IconMovie },
+    { href: "/pages/create/CreatePostScreen", active: false, Icon: IconCreate },
+    { href: "/pages/reels/reels", active: false, Icon: IconMovie },
     { href: "/pages/profile", active: false, Icon: IconPersonNav },
   ];
 

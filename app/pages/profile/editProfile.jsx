@@ -441,6 +441,10 @@ export default function EditProfile() {
     }
   };
 
+
+
+
+
   const handlePickAvatar = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
@@ -458,13 +462,32 @@ export default function EditProfile() {
     if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
 
+    // Eskiroq avatar URL'ini saqlab turamiz (o'chirishda ishlatish uchun)
+    const oldAvatarUrl = avatarUrl; 
+
     setAvatarUrl(asset.uri); // darhol lokal preview
     setAvatarSaving(true);
+    
     try {
+      // 1. Yangi avatarni serverga yuklaymiz
       const updated = await uploadAvatar(asset);
+      
+      // 2. Agar oldin avatar bo'lgan bo'lsa va yangisi omadli yuklangan bo'lsa, eskisini o'chiramiz
+      if (oldAvatarUrl) {
+        try {
+          // O'zingizning API yo'lingizni moslab qo'ying (masalan: oldAvatarUrl yoki avatar ID)
+          await api.delete(`/users/register/${userId}/avatar/`, { data: { old_avatar: oldAvatarUrl } });
+        } catch (deleteErr) {
+          console.warn("Eski avatarni o'chirishda xatolik:", deleteErr);
+          // Eski avatar o'chmay qolsa ham foydalanuvchiga xatolik ko'rsatmaslik mumkin
+        }
+      }
+
       if (updated.avatar) setAvatarUrl(updated.avatar);
       showToast("image updated ✓", "success");
     } catch {
+      // Xatolik bo'lsa, preview'ni qaytarib qo'yamiz
+      setAvatarUrl(oldAvatarUrl);
       showToast("image download error", "error");
     } finally {
       setAvatarSaving(false);
@@ -479,7 +502,7 @@ export default function EditProfile() {
   ];
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#f6f8fa" }}>
+    <View style={{ flex: 1, backgroundColor: "#eeeff1" }}>
       {toast && <Toast {...toast} onClose={() => setToast(null)} />}
 
       {/* ── HEADER ─────────────────────────────────────────────────── */}

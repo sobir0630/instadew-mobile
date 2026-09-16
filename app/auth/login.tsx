@@ -382,7 +382,7 @@ export default function LoginScreen() {
       );
 
       if (response.status === 200) {
-        router.push("/pages/home");
+        router.push("/pages/home/FeedScreen");
       } else {
         console.log("errors")
       }

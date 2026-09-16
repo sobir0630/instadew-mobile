@@ -1,6 +1,11 @@
 // config.js
+import { API_HOST_WS, API_HOST_WEB } from "./ip";
 
-export const API_HOST = "10.56.71.132:8001"; // Replace with your API host and port
+export const API_URL = API_HOST_WEB;
+export const WS_URL = API_HOST_WS;
 
-export const API_URL = `http://${API_HOST}`;
-export const WS_URL = `ws://${API_HOST}`;
+
+
+
+
+    

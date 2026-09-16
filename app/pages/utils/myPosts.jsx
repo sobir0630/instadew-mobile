@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
-import { Video } from "expo-av";
+import { VideoView, useVideoPlayer } from "expo-video";
 import {
   ChevronLeft,
   ImageIcon,
@@ -157,71 +157,223 @@ function SkeletonCard({ width }) {
 //  POST CARD — rasm va video BIR XIL ko'rinishda, faqat videoda play belgisi bor
 // ════════════════════════════════════════════════════════════════════════════
 
+// function PostCard({ post, width, onPress, isVideo }) {
+//   const [loaded, setLoaded] = useState(false);
+
+//   const mediaUri = isVideo ? getVideoMediaUri(post) : getImageMediaUri(post);
+//   const caption = getPostCaption(post);
+//   const likes = getPostLikes(post);
+//   const timeStr = getPostDate(post);
+
+//   const player = useVideoPlayer(mediaUri, (player) => {
+//     player.loop = false;
+//   });
+
+//   return (
+//     <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={[styles.card, { width }]}>
+//       <View style={{ width: "100%", aspectRatio: 1, backgroundColor: "#f4f5f7" }}>
+//         {!loaded && <Shimmer style={StyleSheet.absoluteFill} />}
+
+//         {mediaUri ? (
+//           isVideo ? (
+//             <Video
+//               player={player}
+//               style={{ width: "100%", height: "100%" }}
+//               resizeMode="cover"
+//               shouldPlay={false}
+//               isMuted
+//               useNativeControls={false}
+//               onReadyForDisplay={() => setLoaded(true)}
+//               onError={(err) => {
+//                 console.error("Video error:", err);
+//                 setLoaded(true);
+//               }}
+//             />
+//           ) : (
+//             <Image
+//               source={{ uri: mediaUri }}
+//               style={{ width: "100%", height: "100%" }}
+//               onLoad={() => setLoaded(true)}
+//               onError={() => setLoaded(true)}
+//             />
+//           )
+//         ) : (
+//           <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+//             <ImageIcon size={32} color="#c8cbd0" strokeWidth={1.5} />
+//           </View>
+//         )}
+
+//         {/* Video ekanini bildiruvchi play belgisi */}
+//         {isVideo && mediaUri && (
+//           <View style={styles.playBadge}>
+//             <PlayCircle size={16} color="#fff" fill="rgba(0,0,0,0.35)" strokeWidth={2} />
+//           </View>
+//         )}
+
+//         {/* Like count overlay */}
+//         <View style={styles.likeBadge}>
+//           <Heart size={11} color="#fff" fill="#fff" />
+//           <Text style={styles.likeBadgeText}>{likes >= 1000 ? (likes / 1000).toFixed(1) + "k" : likes}</Text>
+//         </View>
+//       </View>
+
+//       <View style={{ padding: 10, paddingTop: 10 }}>
+//         {caption ? (
+//           <Text style={styles.caption} numberOfLines={2}>
+//             {caption}
+//           </Text>
+//         ) : (
+//           <Text style={styles.noCaption}>Caption yo'q</Text>
+//         )}
+//         {timeStr ? <Text style={styles.timeText}>{timeStr}</Text> : null}
+//       </View>
+//     </TouchableOpacity>
+//   );
+// }
+
+
+function PostVideo({ uri, onLoaded }) {
+  const player = useVideoPlayer(uri, (player) => {
+    player.loop = false;
+    player.muted = true;
+  });
+
+  useEffect(() => {
+    const subscription = player.addListener(
+      "statusChange",
+      ({ status }) => {
+        if (status === "readyToPlay") {
+          onLoaded?.();
+        }
+      }
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, [player, onLoaded]);
+
+  return (
+    <VideoView
+      player={player}
+      style={{
+        width: "100%",
+        height: "100%",
+      }}
+      contentFit="cover"
+      nativeControls={false}
+      surfaceType="textureView"
+    />
+  );
+}
+
 function PostCard({ post, width, onPress, isVideo }) {
   const [loaded, setLoaded] = useState(false);
 
-  const mediaUri = isVideo ? getVideoMediaUri(post) : getImageMediaUri(post);
+  const mediaUri = isVideo
+    ? getVideoMediaUri(post)
+    : getImageMediaUri(post);
+
   const caption = getPostCaption(post);
   const likes = getPostLikes(post);
   const timeStr = getPostDate(post);
 
   return (
-    <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={[styles.card, { width }]}>
-      <View style={{ width: "100%", aspectRatio: 1, backgroundColor: "#f4f5f7" }}>
-        {!loaded && <Shimmer style={StyleSheet.absoluteFill} />}
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={onPress}
+      style={[styles.card, { width }]}
+    >
+      <View
+        style={{
+          width: "100%",
+          aspectRatio: 1,
+          backgroundColor: "#f4f5f7",
+        }}
+      >
+        {!loaded && (
+          <Shimmer style={StyleSheet.absoluteFill} />
+        )}
 
         {mediaUri ? (
           isVideo ? (
-            <Video
-              source={{ uri: mediaUri }}
-              style={{ width: "100%", height: "100%" }}
-              resizeMode="cover"
-              shouldPlay={false}
-              isMuted
-              useNativeControls={false}
-              onReadyForDisplay={() => setLoaded(true)}
-              onError={(err) => {
-                console.error("Video error:", err);
-                setLoaded(true);
-              }}
+            <PostVideo
+              uri={mediaUri}
+              onLoaded={() => setLoaded(true)}
             />
           ) : (
             <Image
               source={{ uri: mediaUri }}
-              style={{ width: "100%", height: "100%" }}
+              style={{
+                width: "100%",
+                height: "100%",
+              }}
+              resizeMode="cover"
               onLoad={() => setLoaded(true)}
               onError={() => setLoaded(true)}
             />
           )
         ) : (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-            <ImageIcon size={32} color="#c8cbd0" strokeWidth={1.5} />
+          <View
+            style={{
+              flex: 1,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <ImageIcon
+              size={32}
+              color="#c8cbd0"
+              strokeWidth={1.5}
+            />
           </View>
         )}
 
-        {/* Video ekanini bildiruvchi play belgisi */}
         {isVideo && mediaUri && (
           <View style={styles.playBadge}>
-            <PlayCircle size={16} color="#fff" fill="rgba(0,0,0,0.35)" strokeWidth={2} />
+            <PlayCircle
+              size={16}
+              color="#fff"
+              fill="rgba(0,0,0,0.35)"
+              strokeWidth={2}
+            />
           </View>
         )}
 
-        {/* Like count overlay */}
         <View style={styles.likeBadge}>
-          <Heart size={11} color="#fff" fill="#fff" />
-          <Text style={styles.likeBadgeText}>{likes >= 1000 ? (likes / 1000).toFixed(1) + "k" : likes}</Text>
+          <Heart
+            size={11}
+            color="#fff"
+            fill="#fff"
+          />
+
+          <Text style={styles.likeBadgeText}>
+            {likes >= 1000
+              ? (likes / 1000).toFixed(1) + "k"
+              : likes}
+          </Text>
         </View>
       </View>
 
       <View style={{ padding: 10, paddingTop: 10 }}>
         {caption ? (
-          <Text style={styles.caption} numberOfLines={2}>
+          <Text
+            style={styles.caption}
+            numberOfLines={2}
+          >
             {caption}
           </Text>
         ) : (
-          <Text style={styles.noCaption}>Caption yo'q</Text>
+          <Text style={styles.noCaption}>
+            Caption yo'q
+          </Text>
         )}
-        {timeStr ? <Text style={styles.timeText}>{timeStr}</Text> : null}
+
+        {timeStr ? (
+          <Text style={styles.timeText}>
+            {timeStr}
+          </Text>
+        ) : null}
       </View>
     </TouchableOpacity>
   );

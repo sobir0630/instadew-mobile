@@ -190,7 +190,7 @@ function onPushTo() {
 
 // ---------------- Session row (Telegram-uslubida) ----------------
 function SessionRow({ session, onRevoke }) {
-  const isThisDevice = session.is_this_device;
+  const isThisDevice = session.is_this_device = false // vaqtincha false bulib turadi muammolar tuzatilguncha;
 
   return (
     <View style={styles.row}>

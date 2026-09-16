@@ -40,7 +40,17 @@
           }
         }
       ],
-      "expo-audio"
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone.",
+          "enableBackgroundPlayback": true,
+          "enableBackgroundRecording": false
+        }
+      ],
+      "expo-video",
+      "expo-asset",
+      ["expo-video", { "supportsBackgroundPlayback": true }] // new
     ],
     "experiments": {
       "typedRoutes": true,
