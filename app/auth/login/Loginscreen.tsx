@@ -1,24 +1,24 @@
-import { useState } from "react";
-import { Link, useRouter } from "expo-router";
-import { api } from "../../api/server";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import { useState } from "react";
 import {
-  View,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StatusBar,
   Text,
   TouchableOpacity,
-  ScrollView,
-  ActivityIndicator,
-  Platform,
-  KeyboardAvoidingView,
-  SafeAreaView,
-  StatusBar,
+  View,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { api } from "../../../api/api/server";
 
-import { IconUser, IconLock, IconEyeOn, IconEyeOff, IconLogin, IconWarning, WaterDropIcon } from "./Icons";
-import { Field } from "./Field";
-import { getSessionData } from "./Session";
-import { styles } from "./LoginStyle";
+import { Field } from "../../../components/login/Field";
+import { IconEyeOff, IconEyeOn, IconLock, IconLogin, IconUser, IconWarning, WaterDropIcon } from "../../../constants/login/Icons";
+import { styles } from "../../../styles/login/LoginStyle";
+import { getSessionData } from "../../../utils/login/Session";
 
 // ════════════════════════════════════════════════════════════════════════════
 //  MAIN
@@ -218,9 +218,10 @@ export default function LoginScreen() {
             {/* ── FOOTER ── */}
             <View style={styles.footer}>
               <Text style={styles.footerText}>Don't have an account? </Text>
-              <Link href="/auth/register/Registerscreen">
-                <Text style={styles.footerLink}>Create account</Text>
-              </Link>
+              <Text 
+                style={styles.footerLink}
+                onPress={() => router.push("/auth/register/RegisterScreen")}
+                >Create account</Text>
             </View>
           </View>
 

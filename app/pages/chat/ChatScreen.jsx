@@ -8,13 +8,13 @@ import {
   ActivityIndicator, Alert,
   Clipboard,
   FlatList, ImageBackground, Keyboard,
-  KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, TextInput,
+  KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput,
   TouchableOpacity, View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import API from "../../../api/api/server"; // loyihangizga qarab moslang
 
-import API from "../../api/server"; // loyihangizga qarab moslang
-
-import { MAX_AUDIO_BYTES, MAX_IMAGE_BYTES, MAX_TEXT_LENGTH, MAX_VIDEO_BYTES, MIN_VOICE_MS, MSG_TYPE } from "./constants/config";
+import { MAX_AUDIO_BYTES, MAX_IMAGE_BYTES, MAX_TEXT_LENGTH, MAX_VIDEO_BYTES, MIN_VOICE_MS, MSG_TYPE } from "../../../constants/chat/config";
 import {
   IconBack,
   IconChatBubble,
@@ -37,41 +37,35 @@ import {
   IconSun,
   IconTrash,
   IconUsers,
-} from "./constants/icons";
-import { styles } from "./constants/styles";
-import { DARK, LIGHT } from "./constants/theme";
+} from "../../../constants/chat/icons";
+import { styles } from "../../../styles/chat/styles";
+import { DARK, LIGHT } from "../../../styles/chat/theme";
 
-import { filterByCategory } from "./utils/categoryFilter";
-import { fetchAllLastMessages, fetchHistory, fetchUsers } from "./utils/chatApi";
-import { authHeader, buildRoomName, formatDuration, formatFileSize, getMyUser, getMyUserId, sanitizeText } from "./utils/helpers";
-import { ensureCameraPermission, ensureMediaLibraryPermission } from "./utils/permissions";
-import { loadAllReadTimestamps, saveReadTimestamp } from "./utils/readTracking";
+import { filterByCategory } from "../../../utils/chat/categoryFilter";
+import { fetchAllLastMessages, fetchHistory, fetchUsers } from "../../../utils/chat/chatApi";
+import { authHeader, buildRoomName, formatDuration, formatFileSize, getMyUser, getMyUserId, sanitizeText } from "../../../utils/chat/helpers";
+import { ensureCameraPermission, ensureMediaLibraryPermission } from "../../../utils/chat/permissions";
+import { loadAllReadTimestamps, saveReadTimestamp } from "../../../utils/chat/readTracking";
 
-import { useChat } from "./hooks/useChat";
-import { useMusicPlayer } from "./hooks/useMusicPlayer";
-import { usePresence } from "./hooks/usePresence";
-import { useVoiceRecorder } from "./hooks/useVoiceRecorder";
+import { useChat } from "../../../hooks/chat/useChat";
+import { useMusicPlayer } from "../../../hooks/chat/useMusicPlayer";
+import { usePresence } from "../../../hooks/chat/usePresence";
+import { useVoiceRecorder } from "../../../hooks/chat/useVoiceRecorder";
 
-import AttachSheet from "./components/AttachSheet";
-import Avatar from "./components/Avatar";
-import CategoryTabs from "./components/CategoryTabs";
-import ChatErrorBoundary from "./components/ChatErrorBoundary";
-import DropMenu from "./components/DropMenu";
-import ImageGalleryViewer from "./components/media/ImageGalleryViewer";
-import MusicPlayerModal from "./components/media/MusicPlayerModal";
-import VideoGalleryViewer from "./components/media/VideoGalleryViewer";
-import { AudioMessageBubble } from "./components/MediaBubbles";
-import MessageBubble, { getMediaUri, getMessageType } from "./components/MessageBubble";
-import TypingDot from "./components/TypingDot";
-import UserListRow from "./components/UserListRow";
-import VoiceRecordButton from "./components/VoiceRecordButton";
-import WallpaperSheet from "./components/WallpaperSheet";
-
-// ════════════════════════════════════════════════════════════════════════════
-//  ChatScreenInner — asosiy ekran. Bu fayl faqat ORKESTRATSIYA qiladi:
-//  hook'lardan holatni oladi, komponentlarga uzatadi. Har bir alohida mantiq
-//  (API, websocket, ovoz yozish, musiqa) o'z fayliga chiqarilgan.
-// ════════════════════════════════════════════════════════════════════════════
+import AttachSheet from "../../../components/chat/AttachSheet";
+import Avatar from "../../../components/chat/Avatar";
+import CategoryTabs from "../../../components/chat/CategoryTabs";
+import ChatErrorBoundary from "../../../components/chat/ChatErrorBoundary";
+import DropMenu from "../../../components/chat/DropMenu";
+import ImageGalleryViewer from "../../../components/chat/media/ImageGalleryViewer";
+import MusicPlayerModal from "../../../components/chat/media/MusicPlayerModal";
+import VideoGalleryViewer from "../../../components/chat/media/VideoGalleryViewer";
+import { AudioMessageBubble } from "../../../components/chat/MediaBubbles";
+import MessageBubble, { getMediaUri, getMessageType } from "../../../components/chat/MessageBubble";
+import TypingDot from "../../../components/chat/TypingDot";
+import UserListRow from "../../../components/chat/UserListRow";
+import VoiceRecordButton from "../../../components/chat/VoiceRecordButton";
+import WallpaperSheet from "../../../components/chat/WallpaperSheet";
 
 function ChatScreenInner() {
   const router = useRouter();
@@ -87,7 +81,6 @@ function ChatScreenInner() {
   const [usersLoading, setUsersLoading] = useState(true);
   const [readMap, setReadMap] = useState({});
 
-  // 🆕 Tanlangan kategoriya (All / Unread / Channels / Bots / Groups)
   const [selectedCategory, setSelectedCategory] = useState("all");
 
   const [activeUser, setActiveUser] = useState(null);
@@ -107,6 +100,7 @@ function ChatScreenInner() {
   const [attachSheetVisible, setAttachSheetVisible] = useState(false);
   const [wallpaperSheetVisible, setWallpaperSheetVisible] = useState(false);
   const [wallpaper, setWallpaper] = useState(null);
+  const [pendingMedia, setPendingMedia] = useState(null);
 
   const openMsgMenu = (msg, event) => {
     const pageY = event?.nativeEvent?.pageY ?? 180;
@@ -114,7 +108,6 @@ function ChatScreenInner() {
     setMsgMenuFor({ msg, anchor: { top: Math.max(40, pageY - 80), left: Math.max(12, Math.min(pageX - 110, 220)) } });
   };
 
-  // 🆕 Rasm / video galereya va musiqa pleyeri holatlari
   const [galleryIndex, setGalleryIndex] = useState(null);
   const [videoGalleryIndex, setVideoGalleryIndex] = useState(null);
   const [musicPlayerVisible, setMusicPlayerVisible] = useState(false);
@@ -123,10 +116,32 @@ function ChatScreenInner() {
   const inputRef = useRef(null);
   const lastTypingSentAt = useRef(0);
 
-  const { messages, setMessages, connected, connecting, typing, sendMessage, sendTyping, reconnect } = useChat(roomName);
+  const {
+    messages,
+    setMessages,
+    connected,
+    connecting,
+
+    typing,
+
+    imageSending,
+    cameraSending,
+    fileSending,
+    musicSending,
+    videoSending,
+    voiceSending,
+
+    sendMessage,
+    sendTyping,
+
+    sendMediaSending,
+    stopMediaSending,
+
+    reconnect,
+  } = useChat(roomName);
   const { isOnline } = usePresence();
   const recorder = useVoiceRecorder();
-  const musicPlayer = useMusicPlayer(); // 🆕 to'liq musiqa pleyeri
+  const musicPlayer = useMusicPlayer();
 
   const t = dark ? DARK : LIGHT;
 
@@ -219,7 +234,6 @@ function ChatScreenInner() {
       )
   );
 
-  // 🆕 Kategoriya bo'yicha filtr (All / Unread / Channels / Bots / Groups)
   const filteredUsers = filterByCategory(searchedUsers, selectedCategory, { unreadCountMap });
 
   const loadWallpaper = async (room) => {
@@ -274,7 +288,13 @@ function ChatScreenInner() {
         return;
       }
 
+      // 🔍 DEBUG: Reply holati haqida batafsil ma'lumotlarni konsolga chiqarish
+      console.log("=== [REPLY DEBUG - HANDLE SEND] ===");
+      console.log("📍 Tanlangan replyTo obyekti:", replyTo);
+
       const replyToId = replyTo?.id ?? null;
+      console.log("🆔 Yuborilayotgan reply_to_id:", replyToId, "| Turi (Type):", typeof replyToId);
+
       const localMsg = {
         id: `local_${Date.now()}`, type: MSG_TYPE.TEXT, message: text, content: text,
         sender: myUsername, sender_username: myUsername,
@@ -282,27 +302,41 @@ function ChatScreenInner() {
         _local: true,
         ...(replyToId ? { reply_to: { ...replyTo, id: replyToId, content: replyTo.message || replyTo.content || replyTo.file_name || "Media" }, reply_to_id: replyToId } : {}),
       };
+
+      console.log("📦 Tayyorlangan Local Message payload:", localMsg);
+
       setMessages((prev) => [...prev, localMsg]);
       setLastMsgMap((prev) => ({ ...prev, [activeUser.username]: localMsg }));
       setInput("");
       setReplyTo(null);
       inputRef.current?.focus();
 
-      const sent = sendMessage(text, replyToId ? { reply_to: replyToId, reply_to_id: replyToId } : {});
+      // WebSocket orqali jo'natish urinishi
+      const extraPayload = replyToId ? { reply_to: replyToId, reply_to_id: replyToId } : {};
+      console.log("🌐 WebSocket ga uzatilayotgan parametrlar:", { text, extraPayload });
+      
+      const sent = sendMessage(text, extraPayload);
+      console.log("📡 WebSocket orqali ketdimi?:", sent ? "HAYO (Sent)" : "YO'Q (Fallback HTTP ishlaydi)");
+
       if (!sent) {
         const headers = await authHeader();
-        API.post(`/messages/message/`, { room: roomName, content: text, reply_to: replyToId }, { headers })
+        const postData = { room: roomName, content: text, reply_to: replyToId };
+        console.log("📤 HTTP POST /messages/message/ ga so'rov yuborilmoqda:", postData);
+
+        API.post(`/messages/message/`, postData, { headers })
           .then((res) => {
+            console.log("✅ HTTP Response muvaffaqiyatli:", res.data);
             setMessages((prev) => prev.map((m) => (m.id === localMsg.id ? { ...m, ...res.data, _local: false } : m)));
             setLastMsgMap((prev) => ({ ...prev, [activeUser.username]: res.data }));
           })
           .catch((err) => {
-            console.error("[sendMessage:http] error:", err?.response?.data || err.message);
+            console.error("❌ HTTP POST error:", err?.response?.data || err.message);
+            console.error("❌ backend javobi detali:", err?.response?.data);
             setMessages((prev) => prev.map((m) => (m.id === localMsg.id ? { ...m, _failed: true } : m)));
           });
       }
     } catch (err) {
-      console.error("[handleSend] error:", err);
+      console.error("💥 [handleSend] Kutilmagan xatolik:", err);
     } finally {
       setSending(false);
     }
@@ -324,6 +358,10 @@ function ChatScreenInner() {
   };
 
   const startReply = (msg) => {
+    console.log("=== [START REPLY DEBUG] ===");
+    console.log("📌 Tanlangan reply xabari obyekti:", msg);
+    console.log("🔑 Tanlangan xabar ID-si:", msg?.id, "| Turi:", typeof msg?.id);
+
     setEditingMsg(null);
     setReplyTo(msg);
     setTimeout(() => inputRef.current?.focus(), 30);
@@ -346,7 +384,10 @@ function ChatScreenInner() {
     ]);
   };
 
-  const cancelReply = () => setReplyTo(null);
+  const cancelReply = () => {
+    console.log("🚫 Reply bekor qilindi");
+    setReplyTo(null);
+  };
 
   const clearHistory = async () => {
     setMessages([]);
@@ -382,7 +423,20 @@ function ChatScreenInner() {
   const apiBaseUrl = API.defaults?.baseURL;
   const messagesWithUri = filteredMessages.map((m) => ({ ...m, _mediaUri: getMediaUri(m, apiBaseUrl) }));
 
-  // 🆕 Galereyalar uchun ro'yxatlar (chatdagi barcha rasm / video / musiqa)
+  const pendingMediaLabel = pendingMedia?.fileName
+    ? pendingMedia.fileName
+    : pendingMedia?.type === MSG_TYPE.IMAGE
+      ? "Rasm"
+      : pendingMedia?.type === MSG_TYPE.VIDEO
+        ? "Video"
+        : pendingMedia?.type === MSG_TYPE.MUSIC
+          ? "Musiqa"
+          : pendingMedia?.type === MSG_TYPE.VOICE
+            ? "Ovozli xabar"
+            : pendingMedia?.type === MSG_TYPE.FILE
+              ? "Fayl"
+              : "Media";
+
   const chatImageMessages = messagesWithUri.filter((m) => getMessageType(m) === MSG_TYPE.IMAGE && m._mediaUri)
     .map((m) => ({ ...m, media_url: m._mediaUri }));
   const chatVideoMessages = messagesWithUri.filter((m) => getMessageType(m) === MSG_TYPE.VIDEO && m._mediaUri)
@@ -399,8 +453,6 @@ function ChatScreenInner() {
     setVideoGalleryIndex(idx >= 0 ? idx : 0);
   };
 
-  // 🆕 Musiqa: bosilgan trekdan boshlab, chatdagi BARCHA musiqa xabarlaridan
-  // navbat (queue) tuziladi va to'liq pleyer ochiladi.
   const openMusicPlayer = (msg) => {
     const idx = chatMusicMessages.findIndex((m) => m.id === msg.id);
     const tracks = chatMusicMessages.map((m) => ({
@@ -415,41 +467,259 @@ function ChatScreenInner() {
 
   // ── MEDIA MESSAGES ───────────────────────────────────────────────────────
 
-  const sendMediaMessage = async ({ uri, type, text, fileName, mimeType, fileSize, duration, replyTo }) => {
+  const sendMediaMessage = async ({
+    uri,
+    type,
+    text,
+    fileName,
+    mimeType,
+    fileSize,
+    duration,
+    replyTo
+  }) => {
     if (!roomName || !activeUser || !uri) return;
-    const limits = { [MSG_TYPE.IMAGE]: MAX_IMAGE_BYTES, [MSG_TYPE.VIDEO]: MAX_VIDEO_BYTES, [MSG_TYPE.AUDIO]: MAX_AUDIO_BYTES, [MSG_TYPE.VOICE]: MAX_AUDIO_BYTES };
+
+    const limits = {
+      [MSG_TYPE.IMAGE]: MAX_IMAGE_BYTES,
+      [MSG_TYPE.VIDEO]: MAX_VIDEO_BYTES,
+      [MSG_TYPE.AUDIO]: MAX_AUDIO_BYTES,
+      [MSG_TYPE.VOICE]: MAX_AUDIO_BYTES,
+    };
+
     if (fileSize && limits[type] && fileSize > limits[type]) {
-      Alert.alert("Fayl juda katta", `Maksimal hajm: ${formatFileSize(limits[type])}`);
+      Alert.alert(
+        "Fayl juda katta",
+        `Maksimal hajm: ${formatFileSize(limits[type])}`
+      );
       return;
     }
 
+    // ================================
+    // MEDIA INDICATOR TYPE
+    // ================================
+
+    const mediaIndicatorType =
+      type === MSG_TYPE.VOICE
+        ? "voice"
+        : type === MSG_TYPE.IMAGE
+          ? "image"
+          : type === MSG_TYPE.VIDEO
+            ? "video"
+            : type === MSG_TYPE.MUSIC
+              ? "music"
+              : type === MSG_TYPE.FILE
+                ? "file"
+                : type;
+
     const localId = `local_${Date.now()}`;
     const replyToId = replyTo?.id ?? null;
+
+    console.log("=== [MEDIA REPLY DEBUG] ===");
+    console.log("📂 Media uchun replyToId:", replyToId);
+    console.log("📂 Media type:", type);
+    console.log("📂 Indicator type:", mediaIndicatorType);
+
     const localMsg = {
-      id: localId, type, media_url: uri, file_name: fileName, mime_type: mimeType,
-      file_size: fileSize, duration, sender: myUsername, sender_username: myUsername,
-      timestamp: new Date().toISOString(), created_at: new Date().toISOString(), _local: true, _uploading: true,
-      ...(replyToId ? { reply_to: { ...replyTo, id: replyToId, content: replyTo.message || replyTo.content || replyTo.file_name || "Media" }, reply_to_id: replyToId } : {}),
+      id: localId,
+      type,
+      media_url: uri,
+      file_name: fileName,
+      mime_type: mimeType,
+      file_size: fileSize,
+      duration,
+      sender: myUsername,
+      sender_username: myUsername,
+      timestamp: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      _local: true,
+      _uploading: true,
+
+      ...(replyToId
+        ? {
+            reply_to: {
+              ...replyTo,
+              id: replyToId,
+              content:
+                replyTo.message ||
+                replyTo.content ||
+                replyTo.file_name ||
+                "Media",
+            },
+            reply_to_id: replyToId,
+          }
+        : {}),
     };
+
+    const mediaLabel = fileName || pendingMediaLabel || "Media";
+    setPendingMedia({ type: mediaIndicatorType, fileName: mediaLabel });
+
     setMessages((prev) => [...prev, localMsg]);
-    setLastMsgMap((prev) => ({ ...prev, [activeUser.username]: localMsg }));
+
+    setLastMsgMap((prev) => ({
+      ...prev,
+      [activeUser.username]: localMsg,
+    }));
 
     try {
+      // ==========================================
+      // 1. MEDIA YUBORILAYOTGANINI WEBSOCKET ORQALI
+      // BOSHQA USERGA XABAR BERAMIZ
+      // ==========================================
+
+      if (typeof sendMediaSending === "function") {
+        sendMediaSending(mediaIndicatorType);
+      }
+
+      console.log(
+        "📡 Media sending indicator yuborildi:",
+        mediaIndicatorType
+      );
+
+      // ==========================================
+      // 2. AUTH
+      // ==========================================
+
       const headers = await authHeader();
+
+      // ==========================================
+      // 3. FORMDATA
+      // ==========================================
+
       const form = new FormData();
+
       form.append("receiver", activeUser.id);
       form.append("message_type", type);
       form.append("content", text || "");
-      if (replyToId) form.append("reply_to", replyToId);
-      form.append("attachment_type", type);
-      form.append("file", { uri, name: fileName, type: mimeType });
 
-      const res = await API.post("/messages/message/", form, { headers: { ...headers, "Content-Type": "multipart/form-data" } });
-      setMessages((prev) => prev.map((msg) => (msg.id === localId ? { ...msg, ...res.data, _uploading: false, _local: false } : msg)));
-      setLastMsgMap((prev) => ({ ...prev, [activeUser.username]: { ...localMsg, ...res.data, _uploading: false, _local: false } }));
+      if (replyToId) {
+        form.append("reply_to", replyToId);
+      }
+
+      form.append("attachment_type", type);
+
+      form.append("file", {
+        uri,
+        name: fileName,
+        type: mimeType,
+      });
+
+      console.log(
+        "📤 Media FormData yuborilmoqda, reply_to:",
+        replyToId
+      );
+
+      // ==========================================
+      // 4. MEDIA UPLOAD
+      // ==========================================
+
+      const res = await API.post(
+        "/messages/message/",
+        form,
+        {
+          headers: {
+            ...headers,
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+
+      console.log(
+        "✅ Media post muvaffaqiyatli:",
+        res.data
+      );
+
+      // ==========================================
+      // 5. UPLOAD TUGADI — INDICATORNI O'CHIRAMIZ
+      // ==========================================
+
+      if (typeof stopMediaSending === "function") {
+        stopMediaSending(mediaIndicatorType);
+      }
+      setPendingMedia(null);
+
+      console.log(
+        "🛑 Media sending indicator to'xtatildi:",
+        mediaIndicatorType
+      );
+
+      // ==========================================
+      // 6. LOCAL MESSAGE → SERVER MESSAGE
+      // ==========================================
+
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === localId
+            ? {
+                ...msg,
+                ...res.data,
+                _uploading: false,
+                _local: false,
+              }
+            : msg
+        )
+      );
+
+      setLastMsgMap((prev) => ({
+        ...prev,
+        [activeUser.username]: {
+          ...localMsg,
+          ...res.data,
+          _uploading: false,
+          _local: false,
+        },
+      }));
+
     } catch (err) {
-      console.error("[sendMediaMessage] error:", err?.response?.data || err.message);
-      setMessages((prev) => prev.map((msg) => (msg.id === localId ? { ...msg, _uploading: false, _failed: true } : msg)));
+
+      // ==========================================
+      // 7. XATO BO'LSA HAM INDICATORNI O'CHIRAMIZ
+      // ==========================================
+
+      if (typeof stopMediaSending === "function") {
+        stopMediaSending(mediaIndicatorType);
+      }
+      setPendingMedia(null);
+
+      console.error(
+        "❌ [sendMediaMessage] error:",
+        err?.response?.data || err.message
+      );
+
+      console.error(
+        "❌ [sendMediaMessage] FULL ERROR:",
+        err
+      );
+
+      console.error(
+        "❌ response:",
+        err?.response?.data
+      );
+
+      console.error(
+        "❌ status:",
+        err?.response?.status
+      );
+
+      console.error(
+        "❌ message:",
+        err?.message
+      );
+
+      // ==========================================
+      // 8. LOCAL MESSAGENI FAILED QILAMIZ
+      // ==========================================
+
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === localId
+            ? {
+                ...msg,
+                _uploading: false,
+                _failed: true,
+              }
+            : msg
+        )
+      );
     }
   };
 
@@ -528,7 +798,9 @@ function ChatScreenInner() {
   const sendRecordingNow = async () => {
     const result = await recorder.stop();
     if (result?.uri && result.duration >= MIN_VOICE_MS) {
-      await sendMediaMessage({ uri: result.uri, type: MSG_TYPE.VOICE, duration: result.duration, fileName: "voice.m4a", mimeType: "audio/m4a", replyTo });
+      const user = await AsyncStorage.getItem("username");
+      const fileName = `${user}_${Date.now()}_voice.m4a`;
+      await sendMediaMessage({ uri: result.uri, type: MSG_TYPE.VOICE, duration: result.duration, fileName, mimeType: "audio/m4a", replyTo });
     }
   };
 
@@ -536,7 +808,9 @@ function ChatScreenInner() {
     if (!pendingVoice?.uri) return;
     const voice = pendingVoice;
     setPendingVoice(null);
-    await sendMediaMessage({ uri: voice.uri, type: MSG_TYPE.VOICE, duration: voice.duration, fileName: "voice.m4a", mimeType: "audio/m4a", replyTo });
+    const user = await AsyncStorage.getItem("username");
+    const fileName = `${user}_${Date.now()}_voice.m4a`;
+    await sendMediaMessage({ uri: voice.uri, type: MSG_TYPE.VOICE, duration: voice.duration, fileName, mimeType: "audio/m4a", replyTo });
   };
 
   // ── WALLPAPER ────────────────────────────────────────────────────────────
@@ -572,10 +846,10 @@ function ChatScreenInner() {
 
   const navItems = [
     { href: "/pages/home/FeedScreen", active: false, Icon: IconHome },
-    { href: "/pages/message", active: true, Icon: IconLogoGlobe },
-    { href: "/pages/createPost", active: false, Icon: IconCreate },
-    { href: "/pages/reals", active: false, Icon: IconMovie },
-    { href: "/pages/profile", active: false, Icon: IconPerson },
+    { href: "/pages/chat/ChatScreen", active: true, Icon: IconLogoGlobe },
+    { href: "/pages/create/CreatePostScreen", active: false, Icon: IconCreate },
+    { href: "/pages/reels/reels", active: false, Icon: IconMovie },
+    { href: "/pages/person/ProfileScreen", active: false, Icon: IconPerson },
   ];
 
   const msgMenuItems = msgMenuFor?.msg
@@ -629,10 +903,6 @@ function ChatScreenInner() {
     );
   };
 
-  // ════════════════════════════════════════════════════════════════════════
-  //  RENDER
-  // ════════════════════════════════════════════════════════════════════════
-
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: t.bg }]}>
       <DropMenu visible={headerMenuVisible} onClose={() => setHeaderMenuVisible(false)} theme={t} anchor={{ top: 88, right: 16 }} items={[
@@ -653,11 +923,8 @@ function ChatScreenInner() {
         onSelectGradient={applyWallpaperGradient} onSelectCustom={applyWallpaperCustom} onReset={resetWallpaper}
       />
 
-      {/* 🆕 Rasm galereyasi (swipe + pastki filmstrip) */}
       <ImageGalleryViewer images={chatImageMessages} index={galleryIndex} onClose={() => setGalleryIndex(null)} onChangeIndex={setGalleryIndex} />
-      {/* 🆕 Video galereyasi (swipe + pauzada pastki ro'yxat) */}
       <VideoGalleryViewer videos={chatVideoMessages} index={videoGalleryIndex} onClose={() => setVideoGalleryIndex(null)} onChangeIndex={setVideoGalleryIndex} />
-      {/* 🆕 To'liq musiqa pleyeri */}
       <MusicPlayerModal visible={musicPlayerVisible} onClose={() => setMusicPlayerVisible(false)} theme={t} player={musicPlayer} />
 
       {view === "list" ? (
@@ -682,7 +949,6 @@ function ChatScreenInner() {
               {search ? <TouchableOpacity onPress={() => setSearch("")}><IconClose color={t.sub} /></TouchableOpacity> : null}
             </View>
 
-            {/* 🆕 Telegram uslubidagi kategoriya tab'lari */}
             <CategoryTabs selected={selectedCategory} onSelect={setSelectedCategory} theme={t} />
           </View>
 
@@ -777,10 +1043,112 @@ function ChatScreenInner() {
                       </View>
                     }
                     ListFooterComponent={
-                      typing ? (
+                      pendingMedia ? (
                         <View style={[styles.msgRow, { marginTop: 8 }]}>
-                          <View style={[styles.typingBubble, { backgroundColor: t.bubbleOther }]}>
-                            {[0, 1, 2].map((d) => <TypingDot key={d} delay={d * 180} color={t.sub} />)}
+                          <View
+                            style={[
+                              styles.typingBubble,
+                              { backgroundColor: t.bubbleOther }
+                            ]}
+                          >
+                            <Text style={{ color: t.sub }}>
+                              {pendingMedia.type === "image" ? "🖼️" : pendingMedia.type === "video" ? "🎬" : pendingMedia.type === "music" ? "🎵" : pendingMedia.type === "voice" ? "🎤" : pendingMedia.type === "file" ? "📎" : "📤"} {pendingMediaLabel} sending...
+                            </Text>
+                          </View>
+                        </View>
+                      ) : typing ? (
+                        <View style={[styles.msgRow, { marginTop: 8 }]}>
+                          <View
+                            style={[
+                              styles.typingBubble,
+                              { backgroundColor: t.bubbleOther }
+                            ]}
+                          >
+                            {[0, 1, 2, 3].map((d) => (
+                              <TypingDot
+                                key={d}
+                                delay={d * 180}
+                                color={t.sub}
+                              />
+                            ))}
+                          </View>
+                        </View>
+                      ) : imageSending ? (
+                        <View style={[styles.msgRow, { marginTop: 8 }]}>
+                          <View
+                            style={[
+                              styles.typingBubble,
+                              { backgroundColor: t.bubbleOther }
+                            ]}
+                          >
+                            <Text style={{ color: t.sub }}>
+                              🖼️ image sending...
+                            </Text>
+                          </View>
+                        </View>
+                      ) : cameraSending ? (
+                        <View style={[styles.msgRow, { marginTop: 8 }]}>
+                          <View
+                            style={[
+                              styles.typingBubble,
+                              { backgroundColor: t.bubbleOther }
+                            ]}
+                          >
+                            <Text style={{ color: t.sub }}>
+                              📷 camera sending...
+                            </Text>
+                          </View>
+                        </View>
+                      ) : fileSending ? (
+                        <View style={[styles.msgRow, { marginTop: 8 }]}>
+                          <View
+                            style={[
+                              styles.typingBubble,
+                              { backgroundColor: t.bubbleOther }
+                            ]}
+                          >
+                            <Text style={{ color: t.sub }}>
+                              📎 File sending...
+                            </Text>
+                          </View>
+                        </View>
+                      ) : musicSending ? (
+                        <View style={[styles.msgRow, { marginTop: 8 }]}>
+                          <View
+                            style={[
+                              styles.typingBubble,
+                              { backgroundColor: t.bubbleOther }
+                            ]}
+                          >
+                            <Text style={{ color: t.sub }}>
+                              🎵 Music sending...
+                            </Text>
+                          </View>
+                        </View>
+                      ) : videoSending ? (
+                        <View style={[styles.msgRow, { marginTop: 8 }]}>
+                          <View
+                            style={[
+                              styles.typingBubble,
+                              { backgroundColor: t.bubbleOther }
+                            ]}
+                          >
+                            <Text style={{ color: t.sub }}>
+                              🎬 Video sending...
+                            </Text>
+                          </View>
+                        </View>
+                      ) : voiceSending ? (
+                        <View style={[styles.msgRow, { marginTop: 8 }]}>
+                          <View
+                            style={[
+                              styles.typingBubble,
+                              { backgroundColor: t.bubbleOther }
+                            ]}
+                          >
+                            <Text style={{ color: t.sub }}>
+                              🎤 Voice message sending...
+                            </Text>
                           </View>
                         </View>
                       ) : null
@@ -823,7 +1191,7 @@ function ChatScreenInner() {
                 {recorder.isRecording ? (
                   <View style={[styles.recordingRow, { backgroundColor: t.inputBg, borderColor: "#EF4444" }]}>
                     <View style={styles.recDot} />
-                    <Text style={{ color: t.text, fontSize: 13, fontWeight: "700" }} >{formatDuration(recorder.durationMs)}</Text>
+                    <Text style={{ color: t.text, fontSize: 13, fontWeight: "700" }}>{formatDuration(recorder.durationMs)}</Text>
                     <View style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end" }}>
                       <IconChevronLeft size={13} color={t.sub} />
                       <Text style={{ color: t.sub, fontSize: 12, marginLeft: 2 }}>Bekor qilish uchun suring</Text>
@@ -832,7 +1200,6 @@ function ChatScreenInner() {
                     <TouchableOpacity onPress={sendRecordingNow} style={[styles.voiceActionBtn, { backgroundColor: "#6908d1" }]}>
                       <IconSend size={25} color="#fff" />
                     </TouchableOpacity>
-                    
                   </View>
                 ) : null}
 

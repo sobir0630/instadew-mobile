@@ -3,10 +3,10 @@ import { useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, RefreshControl, View } from "react-native";
 
-import { ReelItem } from "./components/ReelItems";
-import { fetchReelsVideos } from "./api/ReelsApi";
-import { SCREEN_HEIGHT } from "./constants/ReelsConstants";
-import { styles } from "./styles/ReelsStyles";
+import { ReelItem } from "../../../components/reels/ReelItems";
+import { fetchReelsVideos } from "../../../api/reels/ReelsApi";
+import { SCREEN_HEIGHT } from "../../../constants/reels/ReelsConstants";
+import { styles } from "../../../styles/reels/ReelsStyles";
 
 // ═══════════════════════════════════════════════════════════════════════
 //  ASOSIY EKRAN — vertikal scroll video lenta (Reels)

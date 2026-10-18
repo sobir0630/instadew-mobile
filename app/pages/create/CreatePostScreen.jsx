@@ -1,46 +1,46 @@
-import { useState } from "react";
-import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import { Video, ResizeMode } from "expo-av";
-import API from "../../api/server";
+import { useRouter } from "expo-router";
+import { VideoView, useVideoPlayer } from "expo-video";
+import { useState } from "react";
 import {
-  View,
+  ActivityIndicator,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
-  Image,
-  ScrollView,
-  ActivityIndicator,
-  Platform,
-  KeyboardAvoidingView,
-  SafeAreaView,
+  View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import API from "../../../api/api/server";
 
+import { getToken } from "../../../api/create/PostApi";
+import { AdvancedPanel } from "../../../components/create/AdvancedPanel";
+import { HashtagsPanel } from "../../../components/create/HashtagsPanel";
+import { LocationPanel } from "../../../components/create/LocationPanel";
+import { OptionRow } from "../../../components/create/OptionRow";
+import { TagPeoplePanel } from "../../../components/create/TagPeoplePanel";
 import {
-  IconClose,
-  IconLocation,
-  IconTagUser,
-  IconHashtag,
-  IconCommentOff,
-  IconTrash,
-  IconBack,
-  IconPhotoPlaceholder,
-  IconVideoPlaceholder,
-  IconUpload,
   IconAlert,
-  IconPhotoIcon,
-  IconVideoIcon,
+  IconBack,
   IconCaptionEmoji,
   IconCheckmarkBig,
-} from "./Icons";
-import { TagPeoplePanel } from "./TagPeoplePanel";
-import { LocationPanel } from "./LocationPanel";
-import { HashtagsPanel } from "./HashtagsPanel";
-import { AdvancedPanel } from "./AdvancedPanel";
-import { OptionRow } from "./OptionRow";
-import { getToken } from "./PostApi";
-import { MAX_CAPTION_LENGTH } from "./PostConstants";
-import { styles } from "./CreatePostStyles";
+  IconClose,
+  IconCommentOff,
+  IconHashtag,
+  IconLocation,
+  IconPhotoIcon,
+  IconPhotoPlaceholder,
+  IconTagUser,
+  IconTrash,
+  IconUpload,
+  IconVideoIcon,
+  IconVideoPlaceholder,
+} from "../../../constants/create/Icons";
+import { MAX_CAPTION_LENGTH } from "../../../constants/create/PostConstants";
+import { styles } from "../../../styles/create/CreatePostStyles";
 
 // ════════════════════════════════════════════════════════════════════════════
 //  MAIN — CREATE POST SCREEN
@@ -50,7 +50,16 @@ export default function CreatePostScreen() {
   const router = useRouter();
 
   const [mediaType, setMediaType] = useState("photo"); // "photo" | "video"
+
   const [mediaUri, setMediaUri] = useState(null);
+  
+  const player = useVideoPlayer(
+    mediaType === "video" && mediaUri ? mediaUri : null,
+    (player) => {
+      player.loop = true;
+    }
+  );
+  
   const [caption, setCaption] = useState("");
   const [location, setLocation] = useState("");
   const [hashtags, setHashtags] = useState([]);
@@ -293,12 +302,11 @@ export default function CreatePostScreen() {
             ) : (
               <View style={styles.mediaPreviewWrap}>
                 {mediaType === "video" ? (
-                  <Video
-                    source={{ uri: mediaUri }}
+                  <VideoView
+                    player={player}
                     style={styles.mediaPreview}
-                    useNativeControls
-                    resizeMode={ResizeMode.COVER}
-                    isLooping
+                    nativeControls
+                    contentFit="cover"
                   />
                 ) : (
                   <Image source={{ uri: mediaUri }} style={styles.mediaPreview} resizeMode="cover" />

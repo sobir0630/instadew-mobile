@@ -27,7 +27,6 @@ import {
   Platform,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useNavigation } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
 import {
   ChevronLeft,
@@ -44,7 +43,7 @@ import {
   User as UserIcon,
 } from "lucide-react-native";
 import { router } from "expo-router";
-import API from "../../api/server";
+import API from "../../../api/api/server";
 
 // ════════════════════════════════════════════════════════════════════════════
 //  API — mantiq o'zgartirilmadi, faqat AsyncStorage (async)
@@ -366,7 +365,6 @@ const NAV_ITEMS = [
 // ════════════════════════════════════════════════════════════════════════════
 
 export default function EditProfile() {
-  const navigation = useNavigation();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -508,7 +506,7 @@ export default function EditProfile() {
       {/* ── HEADER ─────────────────────────────────────────────────── */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.push("../profile")}
+          onPress={() => router.push("../person/ProfileScreen")}
           style={{ flexDirection: "row", alignItems: "center", gap: 2, flexShrink: 0 }}
         >
           <ChevronLeft size={18} color="#0969da" strokeWidth={2.5} />
@@ -695,7 +693,7 @@ export default function EditProfile() {
           return (
             <TouchableOpacity
               key={i}
-              onPress={() => navigation.navigate(item.route)}
+              onPress={() => router.push(item.route)}
               style={[styles.navItem, item.active && styles.navItemActive]}
             >
               <Icon size={22} color={item.active ? "#0969da" : "#57606a"} />

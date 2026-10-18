@@ -1,28 +1,29 @@
-import { useState, useEffect, useRef } from "react";
-import { useRouter, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { buildRoomName } from "./message";
-import API from "../api/server";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
 import {
-  View,
+  ActivityIndicator,
+  Dimensions,
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  Image,
-  StyleSheet,
-  FlatList,
-  ScrollView,
-  ActivityIndicator,
-  Modal,
-  Platform,
-  KeyboardAvoidingView,
-  SafeAreaView,
-  Linking,
-  Dimensions,
-  Clipboard,
+  View,
 } from "react-native";
-import { Video, ResizeMode } from "expo-av";
-import Svg, { Path, Circle, Line, Polyline, Polygon, Rect } from "react-native-svg";
+import { SafeAreaView } from "react-native-safe-area-context";
+import * as Clipboard from "expo-clipboard";
+import { VideoView, useVideoPlayer } from "expo-video";
+import Svg, { Circle, Line, Path, Polygon, Polyline, Rect } from "react-native-svg";
+
+import API from "../../api/api/server";
+import { buildRoomName } from "../../utils/chat/helpers";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const GRID_GAP = 2;
@@ -471,9 +472,15 @@ function VideoModal({ post, userAvatar, userName, visible, onClose, onLikeChange
   const { comments, cLoading, text, setText, sending, send, liked, likeCount, likeLoading, handleLike, listRef } =
     useCommentsAndLike(post, onLikeChange);
 
+  const videoSrc = post?.video || post?.video_file || post?.media || "";
+
+  const player = useVideoPlayer(videoSrc || null, (player) => {
+    player.loop = false;
+    player.play();
+  });
+
   if (!post) return null;
 
-  const videoSrc = post.video || post.video_file || post.media || "";
   const postUser = post.author?.username || post.author?.user || userName || "user";
   const postAv = post.author?.avatar || post.author?.profile_picture || userAvatar || null;
   const caption = post.caption || post.description || "";
@@ -484,12 +491,11 @@ function VideoModal({ post, userAvatar, userName, visible, onClose, onLikeChange
         <KeyboardAvoidingView style={[styles.fullModalCard, { backgroundColor: "#0d0f14" }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
           <View style={[styles.fullModalImageWrap, { backgroundColor: "#000", position: "relative" }]}>
             {videoSrc ? (
-              <Video
-                source={{ uri: videoSrc }}
+              <VideoView
+                player={player}
                 style={{ width: "100%", height: "100%" }}
-                useNativeControls
-                resizeMode={ResizeMode.CONTAIN}
-                shouldPlay
+                nativeControls
+                contentFit="contain"
               />
             ) : (
               <View style={{ alignItems: "center", gap: 10 }}>
@@ -612,6 +618,7 @@ function MessageModal({ visible, username, fullName, userAvatar, onClose }) {
     const myUsername = await getMyId();
     const roomName = buildRoomName(myUsername, username);
     const receiverId = await AsyncStorage.getItem("id_account");
+    console.log("account id:", receiverId, "room:", roomName, "sender:", myUsername, "receiver:", username, "text:", text);
     try {
       const token = await getToken();
       await API.post(
@@ -685,7 +692,7 @@ function MessageModal({ visible, username, fullName, userAvatar, onClose }) {
 function MenuModal({ visible, username, isFollowing, onUnfollow, onClose }) {
   const items = [
     { label: isFollowing ? "Unfollow qilish" : "Follow", color: isFollowing ? "#e53935" : "#0d0f14", action: () => { onUnfollow(); onClose(); } },
-    { label: "Profilni nusxalash", color: "#0d0f14", action: () => { Clipboard.setString(`@${username}`); onClose(); } },
+    { label: "Profilni nusxalash", color: "#0d0f14", action: async () => { await Clipboard.setStringAsync(`@${username}`); onClose(); } },
     { label: "Shikoyat qilish", color: "#e53935", action: onClose },
   ];
   return (

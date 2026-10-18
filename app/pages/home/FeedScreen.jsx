@@ -1,30 +1,34 @@
-import { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
+import { Bell } from "lucide-react-native";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator, FlatList, Text, TouchableOpacity, View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Avatar } from "./components/Avatar";
-import { AnimatedStories } from "./components/AnimatedStories";
-import { StoryViewer } from "./components/StoryViewer";
-import { StorySkeleton, PostSkeleton } from "./components/Skeletons";
-import { ReelsRow } from "./components/ReelsRow";
-import { DiscoverGrid } from "./components/DiscoverGrid";
-import { AnimatedPostWrapper } from "./components/AnimatedPostWrapper";
-import { PostModal } from "./components/PostModal";
-import { PostCard } from "./components/PostCard";
-import { SearchBox } from "./components/SearchBox";
+import { AnimatedPostWrapper } from "../../../components/home/AnimatedPostWrapper";
+import { AnimatedStories } from "../../../components/home/AnimatedStories";
+import { Avatar } from "../../../components/home/Avatar";
+import { DiscoverGrid } from "../../../components/home/DiscoverGrid";
 import {
   IconAlert, IconCreate, IconHome, IconImagePlaceholder,
   IconLogoGlobe, IconMovie, IconPerson,
-} from "./components/icons";
+} from "../../../components/home/icons";
+import { PostCard } from "../../../components/home/PostCard";
+import { PostModal } from "../../../components/home/PostModal";
+import { ReelsRow } from "../../../components/home/ReelsRow";
+import { SearchBox } from "../../../components/home/SearchBox";
+import { PostSkeleton, StorySkeleton } from "../../../components/home/Skeletons";
+import { StoryViewer } from "../../../components/home/StoryViewer";
 
-import { fetchCurrentUser, fetchPosts, fetchUsers, fetchVideos } from "./api/FeedApi";
-import { fetchStoryGroups } from "./api/StoryApi";
-import { normalizeVideoForDiscover, normalizeVideoForReel } from "./utils/Normalizers";
-import { getInitials } from "./utils/Formatters";
-import { useViewableVideo } from "./hooks/useViewableVideo";
-import { styles } from "./styles/FeedStyles";
+import { fetchCurrentUser, fetchPosts, fetchUsers, fetchVideos } from "../../../api/home/FeedApi";
+import { fetchStoryGroups } from "../../../api/home/StoryApi";
+import { useViewableVideo } from "../../../hooks/home/useViewableVideo";
+import { styles } from "../../../styles/home/FeedStyles";
+import { getInitials } from "../../../utils/home/Formatters";
+import { normalizeVideoForDiscover, normalizeVideoForReel } from "../../../utils/home/Normalizers";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+import API from "../../../api/api/server";
 
 // ═══════════════════════════════════════════════════════════════════════
 //  MAIN FEED SCREEN
@@ -49,6 +53,48 @@ export default function FeedScreen() {
   const [storyGroups, setStoryGroups] = useState([]);
   const [storyViewerVisible, setStoryViewerVisible] = useState(false);
   const [storyViewerIndex, setStoryViewerIndex] = useState(0);
+  const [count, setCount] = useState(0);
+
+  async function getUnreadCount() {
+    try {
+      const token = await AsyncStorage.getItem("token");
+
+      const response = await API.get(
+        "/notifications/notifications/",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        }
+      );
+
+      const data = response.data;
+
+      const result = data.filter(
+        (item) => item.is_read === false
+      ).length;
+
+      console.log("unread count:", result);
+
+      return result;
+    } catch (error) {
+      console.log(
+        "Unread count error:",
+        error?.response?.data || error.message
+      );
+
+      return 0;
+    }
+  }
+
+  useEffect(() => {
+    getUnreadCount().then((result) => {
+      setCount(result);
+    });
+  }, []);
+ 
+  // =================
 
   useEffect(() => { loadAll(); }, []);
 
@@ -220,6 +266,20 @@ export default function FeedScreen() {
           <Text style={styles.logoText}>instadew</Text>
         </View>
         <SearchBox users={users} />
+
+        <TouchableOpacity onPress={() => router.push("/pages/notifications/notification")}>
+          <Bell style={styles.bell} size={26} color="#4e6376" />
+
+          {count > 0 && (
+            <View style={styles.countBadge}>
+              <Text style={styles.countText}>
+                {count > 99 ? "99+" : count}
+              </Text>
+            </View>
+          )}
+
+        </TouchableOpacity>
+        
         <TouchableOpacity onPress={() => router.push("/pages/person/ProfileScreen")}>
           {currentUser ? (
             <Avatar src={currentAvatar} initials={currentInitials} size={32} gradA="#667eea" gradB="#764ba2" />

@@ -1,26 +1,35 @@
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "expo-router";
-import { api as API } from "../../api/server"; // loyihangizga qarab yo'lni moslang
+
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
 import {
-  View,
+  Linking,
+  ScrollView,
   Text,
   TouchableOpacity,
-  ScrollView,
-  SafeAreaView,
-  Linking,
+  View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { api as API } from "../../../api/api/server"; // loyihangizga qarab yo'lni moslang
 
-import Avatar from "./components/Avatar";
-import { ProfileSkeleton } from "./components/Skeleton";
-import PostModal from "./components/PostModal";
-import PinchZoomGrid from "./components/PinchZoomGrid";
+import Avatar from "../../../components/person/Avatar";
+import PinchZoomGrid from "../../../components/person/PinchZoomGrid";
+import PostModal from "../../../components/person/PostModal";
+import { ProfileSkeleton } from "../../../components/person/Skeleton";
 import {
-  IconSettings, IconGrid, IconVideo, IconSaved, IconImagePlaceholder,
-  IconHome, IconLogoGlobe, IconCreate, IconMovie, IconPerson,
-} from "./constants/icons";
-import { fmtNum } from "./utils/helpers";
-import { styles } from "./styles/styles";
+  IconCreate,
+  IconGrid,
+  IconHome,
+  IconImagePlaceholder,
+  IconLogoGlobe,
+  IconMovie, IconPerson,
+  IconSaved,
+  IconSettings,
+  IconVideo,
+} from "../../../constants/person/icons";
+import { styles } from "../../../styles/person/styles";
+import { fmtNum } from "../../../utils/person/helpers";
 
 // ════════════════════════════════════════════════════════════════════════════
 //  MAIN PROFILE SCREEN
@@ -158,10 +167,10 @@ export default function ProfileScreen() {
 
   const navItems = [
     { href: "/pages/home/FeedScreen", active: false, Icon: IconHome },
-    { href: "/pages/message", active: false, Icon: IconLogoGlobe },
+    { href: "/pages/chat/ChatScreen", active: false, Icon: IconLogoGlobe },
     { href: "/pages/create/CreatePostScreen", active: false, Icon: IconCreate },
     { href: "/pages/reels/reels", active: false, Icon: IconMovie },
-    { href: "/pages/profile", active: true, Icon: IconPerson },
+    { href: "/pages/person/ProfileScreen", active: true, Icon: IconPerson },
   ];
 
   const tabs = [
@@ -195,7 +204,7 @@ export default function ProfileScreen() {
         <Text style={styles.headerTitle} numberOfLines={1}>
           {loading ? "" : full_name}
         </Text>
-        <TouchableOpacity onPress={() => router.push("/utils/settings")} style={styles.settingsBtn}>
+        <TouchableOpacity onPress={() => router.push("/pages/settings")} style={styles.settingsBtn}>
           <IconSettings />
         </TouchableOpacity>
       </View>
@@ -244,7 +253,7 @@ export default function ProfileScreen() {
               <Text style={styles.editProfileBtnText}>Edit Profile</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => router.push("/pages/utils/myPosts")}
+              onPress={() => router.push("/pages/profile/myPosts")}
               style={styles.editPostsBtn}
             >
               <Text style={styles.editPostsBtnText}>Edit Posts</Text>
