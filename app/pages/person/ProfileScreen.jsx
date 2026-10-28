@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { api as API } from "../../../api/api/server"; // loyihangizga qarab yo'lni moslang
+import { api as API } from "../../../api/api/server"; 
 
 import Avatar from "../../../components/person/Avatar";
 import PinchZoomGrid from "../../../components/person/PinchZoomGrid";
@@ -23,6 +23,7 @@ import {
   IconHome,
   IconImagePlaceholder,
   IconLogoGlobe,
+  IconChat,
   IconMovie, IconPerson,
   IconSaved,
   IconSettings,
@@ -168,7 +169,7 @@ export default function ProfileScreen() {
   const navItems = [
     { href: "/pages/home/FeedScreen", active: false, Icon: IconHome },
     { href: "/pages/chat/ChatScreen", active: false, Icon: IconLogoGlobe },
-    { href: "/pages/create/CreatePostScreen", active: false, Icon: IconCreate },
+    { href: "/pages/create/CreatePostScreen", active: false, Icon: IconCreate, isCenter: true },
     { href: "/pages/reels/reels", active: false, Icon: IconMovie },
     { href: "/pages/person/ProfileScreen", active: true, Icon: IconPerson },
   ];
@@ -274,9 +275,6 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         ))}
       </View>
-
-      {/* YANGI: pinch-zoom haqida qisqa maslahat */}
-      <Text style={styles.zoomHint}>Kattalashtirish/kichiklashtirish uchun ikki barmoq bilan siqing yoki cho'zing</Text>
     </>
   );
 
@@ -328,15 +326,21 @@ export default function ProfileScreen() {
 
       {/* Bottom nav */}
       <View style={styles.bottomNav}>
-        {navItems.map((item, i) => (
-          <TouchableOpacity
-            key={i}
-            onPress={() => router.push(item.href)}
-            style={[styles.navItem, item.active && styles.navItemActive]}
-          >
-            <item.Icon color={item.active ? "#0969da" : "#57606a"} />
-          </TouchableOpacity>
-        ))}
+        {navItems.map((item, i) => {
+          const isCenter = item.isCenter;
+          return (
+            <TouchableOpacity
+              key={i}
+              onPress={() => router.push(item.href)}
+              style={[styles.navItem, isCenter && styles.centerItem]}
+            >
+              <item.Icon
+                color={isCenter ? "#010811" : item.active ? "#1541d3" : "#10130f"}
+                size={isCenter ? 34 : 24}
+              />
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </SafeAreaView>
   );

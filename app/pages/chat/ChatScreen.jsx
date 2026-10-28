@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput,
   TouchableOpacity, View,
 } from "react-native";
+import { Video } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import API from "../../../api/api/server"; // loyihangizga qarab moslang
 
@@ -24,6 +25,7 @@ import {
   IconCopy,
   IconCreate,
   IconEdit,
+  IconReply,
   IconHome, IconLogoGlobe,
   IconMoon,
   IconMoreVertical,
@@ -854,7 +856,7 @@ function ChatScreenInner() {
 
   const msgMenuItems = msgMenuFor?.msg
     ? [
-        { label: "Reply", icon: <IconEdit color={t.text} />, action: () => startReply(msgMenuFor.msg) },
+        { label: "Reply", icon: <IconReply color={t.text} />, action: () => startReply(msgMenuFor.msg) },
         ...(String(msgMenuFor.msg.sender) === String(myUserId) || msgMenuFor.msg.sender === myUsername || msgMenuFor.msg.sender_username === myUsername
           ? [
               ...(msgMenuFor.msg.message_type === MSG_TYPE.TEXT || !msgMenuFor.msg.message_type
@@ -997,9 +999,36 @@ function ChatScreenInner() {
                     {connecting ? "Connecting..." : isOnline(activeUser.username) ? "● Online" : "○ Offline"}
                   </Text>
                 </View>
+
+            {/* Video call */}
+                <TouchableOpacity
+                  onPress={() => 
+                      router.push({
+                        pathname: "/pages/call/VideoCallScreen",
+                        params: {
+                          roomName: roomName,
+                          isCaller: "true",
+                        },
+                      })
+                  }
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#7e979c",
+                    marginLeft: 8,
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Video size={24} color="#FFFFFF" strokeWidth={2} />
+                </TouchableOpacity>
+
                 <TouchableOpacity onPress={() => { setShowMsgSearch((s) => !s); setMsgSearch(""); }} style={[styles.iconBtn, { backgroundColor: showMsgSearch ? t.accent : t.card, borderColor: t.border }]}>
                   <IconSearch color={showMsgSearch ? "#fff" : t.sub} />
                 </TouchableOpacity>
+
                 <TouchableOpacity onPress={() => setHeaderMenuVisible(true)} style={[styles.iconBtn, { backgroundColor: t.card, borderColor: t.border }]}>
                   <IconMoreVertical color={t.sub} />
                 </TouchableOpacity>

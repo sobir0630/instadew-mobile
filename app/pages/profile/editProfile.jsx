@@ -349,18 +349,6 @@ function SaveBtn({ onPress, saving, label = "Saqlash" }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  BOTTOM NAV
-// ════════════════════════════════════════════════════════════════════════════
-
-const NAV_ITEMS = [
-  { route: "Home", Icon: Home },
-  { route: "Explore", Icon: Search },
-  { route: "CreatePost", Icon: PlusSquare },
-  { route: "Movie", Icon: Film },
-  { route: "Person", Icon: UserIcon, active: true },
-];
-
-// ════════════════════════════════════════════════════════════════════════════
 //  MAIN COMPONENT
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -685,22 +673,6 @@ export default function EditProfile() {
           </View>
         )}
       </ScrollView>
-
-      {/* ── BOTTOM NAV ─────────────────────────────────────────────── */}
-      <View style={styles.bottomNav}>
-        {NAV_ITEMS.map((item, i) => {
-          const Icon = item.Icon;
-          return (
-            <TouchableOpacity
-              key={i}
-              onPress={() => router.push(item.route)}
-              style={[styles.navItem, item.active && styles.navItemActive]}
-            >
-              <Icon size={22} color={item.active ? "#0969da" : "#57606a"} />
-            </TouchableOpacity>
-          );
-        })}
-      </View>
     </View>
   );
 }

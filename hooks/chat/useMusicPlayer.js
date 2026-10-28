@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from "expo-audio";
+import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 // ════════════════════════════════════════════════════════════════════════════
 //  useMusicPlayer — musiqa navbati (queue) va to'liq boshqaruv
@@ -38,7 +38,9 @@ async function ensureBackgroundAudioMode() {
   }
 }
 
-export function useMusicPlayer() {
+const MusicPlayerContext = createContext(null);
+
+function useMusicPlayerController() {
   const [queue, setQueue] = useState([]); // { id, uri, title, artist, artwork }[]
   const [currentIndex, setCurrentIndex] = useState(0);
   const current = queue[currentIndex] || null;
@@ -73,18 +75,35 @@ export function useMusicPlayer() {
   // uchun metama'lumot (title/artist/rasm) yuboriladi.
   useEffect(() => {
     if (!current || !player) return;
+
+    console.log("[useMusicPlayer] current track changed", {
+      title: current.title,
+      artist: current.artist,
+      uri: current.uri,
+      queueLength: queue.length,
+      currentIndex,
+    });
+
     if (didInit.current) {
       player.replace?.(current.uri);
     }
     didInit.current = true;
-    player.play();
 
-    player.setActiveForLockScreen?.(true, {
-      title: current.title || "Musiqa",
-      artist: current.artist || "",
-      albumTitle: current.album || "",
-      artworkUrl: current.artwork || undefined,
-    });
+    try {
+      player.play();
+      player.setActiveForLockScreen?.(true, {
+        title: current.title || "Musiqa",
+        artist: current.artist || "",
+        albumTitle: current.album || "",
+        artworkUrl: current.artwork || undefined,
+      });
+    } catch (err) {
+      console.error("[useMusicPlayer] failed to start current track", {
+        err,
+        current,
+        currentIndex,
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, current?.uri]);
 
@@ -98,17 +117,43 @@ export function useMusicPlayer() {
 
   // Chatdagi barcha musiqa xabarlaridan yangi navbat boshlash
   const playQueue = useCallback((tracks, startIndex = 0) => {
-    didInit.current = false;
-    setQueue(tracks);
-    setCurrentIndex(startIndex);
+    try {
+      console.log("[useMusicPlayer] playQueue called", {
+        trackCount: Array.isArray(tracks) ? tracks.length : 0,
+        startIndex,
+        tracks: Array.isArray(tracks)
+          ? tracks.map((track) => ({
+              id: track?.id,
+              title: track?.title,
+              artist: track?.artist,
+              uri: track?.uri,
+            }))
+          : [],
+      });
+      didInit.current = false;
+      setQueue(tracks);
+      setCurrentIndex(startIndex);
+    } catch (err) {
+      console.error("[useMusicPlayer] playQueue failed", {
+        err,
+        trackCount: Array.isArray(tracks) ? tracks.length : 0,
+        startIndex,
+      });
+      throw err;
+    }
   }, []);
 
   const stopAndClear = useCallback(() => {
-    player?.pause();
-    player?.setActiveForLockScreen?.(false);
-    setQueue([]);
-    setCurrentIndex(0);
-    didInit.current = false;
+    console.log("[useMusicPlayer] stopAndClear called");
+    try {
+      player?.pause();
+      player?.setActiveForLockScreen?.(false);
+      setQueue([]);
+      setCurrentIndex(0);
+      didInit.current = false;
+    } catch (err) {
+      console.error("[useMusicPlayer] stopAndClear failed", { err });
+    }
   }, [player]);
 
   return {
@@ -120,4 +165,18 @@ export function useMusicPlayer() {
     hasNext: currentIndex < queue.length - 1,
     hasPrev: currentIndex > 0,
   };
+}
+
+export function MusicPlayerProvider({ children }) {
+  const value = useMusicPlayerController();
+  return <MusicPlayerContext.Provider value={value}>{children}</MusicPlayerContext.Provider>;
+}
+
+export function useMusicPlayer() {
+  const context = useContext(MusicPlayerContext);
+  if (!context) {
+    console.warn("[useMusicPlayer] used outside MusicPlayerProvider");
+    return null;
+  }
+  return context;
 }

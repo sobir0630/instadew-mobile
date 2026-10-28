@@ -50,15 +50,22 @@ export const IconAlert = ({ size = 18, color = "#cf222e" }) => (
     <Circle cx="12" cy="12" r="10" /><Line x1="12" y1="8" x2="12" y2="12" /><Line x1="12" y1="16" x2="12.01" y2="16" />
   </Svg>
 );
-export const IconLogoGlobe = ({ size = 16, color = "#fff" }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5">
-    <Path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" />
+export const IconLogoGlobe = ({ size = 26, color = "#fff" }) => (
+  <Svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+  >
+    <Path
+      d="M21.8 2.2 2.7 9.6c-1.3.5-1.3 1.2-.2 1.6l4.9 1.5 1.9 6.1c.2.7.1 1 .8 1 .5 0 .8-.2 1.1-.5l2.4-2.3 5 3.7c.9.5 1.5.2 1.7-.9L23.2 3.5c.3-1.4-.5-2-1.4-1.3ZM9.1 12.4l10.1-6.8c.5-.3.9-.1.5.2l-8.3 7.7-.3 3.3-2-4.4Z"
+      fill={color}
+    />
   </Svg>
 );
 export const IconHome = ({ size = 22, color = "#57606a" }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
-    <Path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-    <Polyline points="9 22 9 12 15 12 15 22" />
+    <Path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><Polyline points="9 20 9 12 15 12 15 20" />
   </Svg>
 );
 export const IconCreate = ({ size = 22, color = "#57606a" }) => (

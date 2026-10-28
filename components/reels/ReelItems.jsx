@@ -5,8 +5,10 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { API_HOST_WEB } from "../../api/api/ip";
 import { fetchUserAvatar, toggleVideoLike } from "../../api/reels/ReelsApi";
+import { SCREEN_HEIGHT, SCREEN_WIDTH } from "../../constants/reels/ReelsConstants";
 import { styles } from "../../styles/reels/ReelsStyles";
 import { formatCount } from "../../utils/reels/formatters";
+import { shouldHandleDoubleTap } from "../../utils/reels/tapLogic";
 import { CommentsSheet } from "./ComentsSheet";
 import { MoreOptionsSheet } from "./MoreOptionsSheet";
 import { ShareSheet } from "./ShareSheet";
@@ -36,20 +38,39 @@ export function ReelItem({ video, isActive }) {
   const [moreVisible, setMoreVisible] = useState(false);
   const [commentCount, setCommentCount] = useState(video.comments_count || 0);
   const [avatar, setAvatar] = useState(null);
+  const [burst, setBurst] = useState(null);
 
-  const heartScale = useRef(new Animated.Value(0)).current;
+  const [heartScale] = useState(() => new Animated.Value(0));
+  const [commentScale] = useState(() => new Animated.Value(0));
   const lastTap = useRef(0);
+  const singleTapTimer = useRef(null);
+  const burstIdRef = useRef(0);
 
   // Video faqat ekranda ko'rinib turganda ijro etiladi —
   // shuning uchun ekrandan chiqib ketganda avtomatik to'xtaydi va boshiga qaytadi.
   useEffect(() => {
-    if (isActive) {
-      player.play();
-    } else {
+    if (!player) return;
+
+    if (!isActive) {
       player.pause();
-      player.currentTime = 0;
+      return;
     }
-  }, [isActive, player]);
+
+    if (isPaused) {
+      player.pause();
+      return;
+    }
+
+    player.play();
+  }, [isActive, isPaused, player]);
+
+  useEffect(() => {
+    return () => {
+      if (singleTapTimer.current) {
+        clearTimeout(singleTapTimer.current);
+      }
+    };
+  }, []);
 
   // ── TUZATILDI: asl koddagi avatar yuklash logikasi component render
   // paytida (useEffect'siz, await'siz) chaqirilar edi — bu hech qachon
@@ -80,31 +101,50 @@ export function ReelItem({ video, isActive }) {
     }
   };
 
-  const showHeartAnimation = () => {
+  const showHeartAnimation = (x, y) => {
+    burstIdRef.current += 1;
+    setBurst({ x, y, id: burstIdRef.current });
     heartScale.setValue(0);
+    commentScale.setValue(0);
+
     Animated.sequence([
-      Animated.spring(heartScale, { toValue: 1, useNativeDriver: true, friction: 3 }),
-      Animated.timing(heartScale, { toValue: 0, duration: 400, delay: 300, useNativeDriver: true }),
+      Animated.spring(heartScale, { toValue: 1, useNativeDriver: true, friction: 4 }),
+      Animated.timing(heartScale, { toValue: 0, duration: 420, delay: 180, useNativeDriver: true }),
     ]).start();
+
+    Animated.sequence([
+      Animated.spring(commentScale, { toValue: 1, useNativeDriver: true, friction: 4 }),
+      Animated.timing(commentScale, { toValue: 0, duration: 350, delay: 220, useNativeDriver: true }),
+    ]).start(() => setBurst(null));
   };
 
-  const handleDoubleTap = () => {
-    const now = Date.now();
-    if (now - lastTap.current < 280) {
+  const handleVideoTap = (event) => {
+    const now = event?.nativeEvent?.timestamp ?? 0;
+    const x = event?.nativeEvent?.locationX ?? SCREEN_WIDTH / 2;
+    const y = event?.nativeEvent?.locationY ?? SCREEN_HEIGHT / 2;
+
+    if (shouldHandleDoubleTap(now, lastTap.current, 280)) {
+      if (singleTapTimer.current) {
+        clearTimeout(singleTapTimer.current);
+      }
+
+      lastTap.current = 0;
       if (!liked) toggleLike();
-      showHeartAnimation();
-    } else {
-      togglePause();
+      showHeartAnimation(x, y);
+      return;
     }
+
     lastTap.current = now;
+    if (singleTapTimer.current) {
+      clearTimeout(singleTapTimer.current);
+    }
+
+    singleTapTimer.current = setTimeout(() => {
+      togglePause();
+    }, 220);
   };
 
   const togglePause = () => {
-    if (isPaused) {
-      player.play();
-    } else {
-      player.pause();
-    }
     setIsPaused((p) => !p);
   };
 
@@ -119,7 +159,7 @@ export function ReelItem({ video, isActive }) {
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity activeOpacity={1} style={StyleSheet.absoluteFill} onPress={handleDoubleTap}>
+      <TouchableOpacity activeOpacity={1} style={StyleSheet.absoluteFill} onPress={handleVideoTap}>
         <VideoView
           player={player}
           style={StyleSheet.absoluteFill}
@@ -128,21 +168,43 @@ export function ReelItem({ video, isActive }) {
         />
       </TouchableOpacity>
 
-      {/* Ikki marta bosilganda chiqadigan yurak animatsiyasi */}
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.heartOverlay,
-          {
-            opacity: heartScale,
-            transform: [
-              { scale: heartScale.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1.4] }) },
-            ],
-          },
-        ]}
-      >
-        <Ionicons name="heart" size={110} color="#fff" />
-      </Animated.View>
+      {burst && (
+        <>
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.heartOverlay,
+              {
+                left: burst.x,
+                top: burst.y,
+                opacity: heartScale,
+                transform: [
+                  { scale: heartScale.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1.5] }) },
+                ],
+              },
+            ]}
+          >
+            <Ionicons name="heart" size={80} color="#fff" />
+          </Animated.View>
+
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.commentBurst,
+              {
+                left: burst.x + 38,
+                top: burst.y + 24,
+                opacity: commentScale,
+                transform: [
+                  { scale: commentScale.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1.2] }) },
+                ],
+              },
+            ]}
+          >
+            <Ionicons name="chatbubble" size={18} color="#fff" />
+          </Animated.View>
+        </>
+      )}
 
       {/* Ovozni yoqish / o'chirish */}
       <TouchableOpacity style={styles.muteBtn} onPress={() => setIsMuted((m) => !m)}>

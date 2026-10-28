@@ -1,5 +1,7 @@
 import React from "react";
 import Svg, { Path, Circle, Line, Polyline, Rect, Polygon } from "react-native-svg";
+import FontAwesome5 from '@expo/vector-icons/FontAwesome5'
+
 
 export const IconHeart = ({ size = 20, filled = false, color = "#57606a" }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? color : "none"} stroke={color} strokeWidth="2">
@@ -59,14 +61,55 @@ export const IconImagePlaceholder = ({ size = 24, color = "#d0d7de" }) => (
 );
 export const IconHome = ({ size = 22, color = "#57606a" }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
-    <Path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><Polyline points="9 22 9 12 15 12 15 22" />
+    <Path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><Polyline points="9 20 9 12 15 12 15 20" />
   </Svg>
 );
+
 export const IconLogoGlobe = ({ size = 26, color = "#fff" }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5">
-    <Path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" />
+  <Svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+  >
+    <Path
+      d="M21.8 2.2 2.7 9.6c-1.3.5-1.3 1.2-.2 1.6l4.9 1.5 1.9 6.1c.2.7.1 1 .8 1 .5 0 .8-.2 1.1-.5l2.4-2.3 5 3.7c.9.5 1.5.2 1.7-.9L23.2 3.5c.3-1.4-.5-2-1.4-1.3ZM9.1 12.4l10.1-6.8c.5-.3.9-.1.5.2l-8.3 7.7-.3 3.3-2-4.4Z"
+      fill={color}
+    />
   </Svg>
 );
+
+
+export const IconChat = ({
+  size = 22,
+  color = "#57606a",
+}) => (
+  <Svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={color}
+    strokeWidth={1.8}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    {/* Asosiy chat — yumaloq burchaklar */}
+    <Path
+      d="M12 3.5H5.5A3.5 3.5 0 0 0 2 7v7
+         a3.5 3.5 0 0 0 3.5 3.5H7v3l4-3h2
+         a3.5 3.5 0 0 0 3.5-3.5V7
+         A3.5 3.5 0 0 0 13 3.5Z"
+    />
+
+    {/* Ikkinchi kichik chat */}
+    <Path
+      d="M12 8.5h9.5A3.5 3.5 0 0 1 23 11v5
+         a3.5 3.5 0 0 1-3.5 3.5H19v2l-4-2"
+    />
+  </Svg>
+);
+
 export const IconCreate = ({ size = 22, color = "#57606a" }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
     <Rect x="3" y="3" width="18" height="18" rx="2" />

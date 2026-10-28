@@ -1,0 +1,882 @@
+
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Instadew • WebSocket Lab</title>
+
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090d18;
+      --panel: #111827;
+      --panel2: #0c1322;
+      --border: #263247;
+      --text: #e8edf7;
+      --muted: #91a0b8;
+      --accent: #8b7cff;
+      --green: #43d9a3;
+      --red: #ff647c;
+      --yellow: #ffc66d;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(ellipse at top left, #25204a 0, transparent 38%),
+        var(--bg);
+      color: var(--text);
+      font: 14px/1.5 system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    button, input, textarea, select { font: inherit; }
+
+    button {
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: #202b40;
+      color: var(--text);
+      border-radius: 9px;
+      padding: 10px 13px;
+      transition: .15s;
+    }
+
+    button:hover { filter: brightness(1.2); }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+
+    .primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+      font-weight: 700;
+    }
+
+    .danger {
+      background: #351b2a;
+      border-color: #713046;
+      color: #ff9aac;
+    }
+
+    .app {
+      max-width: 1440px;
+      padding: 24px;
+      margin: auto;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+    }
+
+    .logo {
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #9988ff, #5141d8);
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    h1, h2, p { margin: 0; }
+    h1 { font-size: 22px; }
+    h2 { font-size: 15px; margin-bottom: 15px; }
+
+    .muted { color: var(--muted); }
+    .small { font-size: 12px; }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      color: var(--muted);
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #758198;
+    }
+
+    .dot.connected {
+      background: var(--green);
+      box-shadow: 0 0 10px #43d9a355;
+    }
+
+    .dot.error { background: var(--red); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 340px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .stack { display: grid; gap: 18px; min-width: 0; }
+
+    .panel {
+      background: color-mix(in srgb, var(--panel) 94%, transparent);
+      border: 1px solid var(--border);
+      border-radius: 15px;
+      padding: 19px;
+      min-width: 0;
+    }
+
+    label {
+      display: block;
+      color: #bdc9dd;
+      font-size: 12px;
+      margin-bottom: 7px;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      color: var(--text);
+      padding: 11px 12px;
+      outline: none;
+      min-width: 0;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      border-color: var(--accent);
+    }
+
+    .field { margin-bottom: 15px; }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .row > * { min-width: 0; }
+    .row .grow { flex: 1; }
+
+    .actions { display: flex; gap: 9px; }
+    .actions button { flex: 1; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .stat {
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      padding: 14px;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 23px;
+      margin-top: 5px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 7px;
+      flex-wrap: wrap;
+      margin-bottom: 13px;
+    }
+
+    .tab.active {
+      background: #302b58;
+      border-color: #6f61ca;
+    }
+
+    .editor { display: none; }
+    .editor.active { display: block; }
+
+    textarea {
+      resize: vertical;
+      min-height: 115px;
+      font: 12px/1.6 ui-monospace, monospace;
+    }
+
+    .console {
+      height: 430px;
+      overflow: auto;
+      background: #080d17;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+    }
+
+    .log {
+      padding: 10px;
+      border-bottom: 1px solid #202a3a;
+      overflow-wrap: anywhere;
+    }
+
+    .log:last-child { border-bottom: 0; }
+    .log .time { color: #7888a3; font-size: 11px; }
+    .log .tag { font-weight: 750; margin: 0 6px; }
+    .log .body {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      margin-top: 5px;
+      font: 12px/1.6 ui-monospace, monospace;
+    }
+
+    .log.info .tag { color: #a69aff; }
+    .log.success .tag { color: var(--green); }
+    .log.error .tag { color: var(--red); }
+    .log.sent .tag { color: #79b8ff; }
+    .log.received .tag { color: #64dfbf; }
+    .log.warning .tag { color: var(--yellow); }
+
+    .checkbox {
+      display: flex;
+      gap: 9px;
+      align-items: center;
+      margin: 12px 0;
+      color: var(--muted);
+    }
+
+    .checkbox input {
+      width: auto;
+      accent-color: var(--accent);
+    }
+
+    .hint {
+      border-left: 3px solid var(--accent);
+      padding: 10px 12px;
+      background: #1b1b34;
+      color: #c8c4ef;
+      border-radius: 0 8px 8px 0;
+      font-size: 12px;
+      margin-top: 14px;
+    }
+
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 22px;
+    }
+
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 520px) {
+      .app { padding: 13px; }
+      header { align-items: flex-start; flex-direction: column; }
+      .panel { padding: 14px; }
+      .stats { gap: 8px; }
+      .stat { padding: 10px; }
+      .stat strong { font-size: 20px; }
+      .console { height: 350px; }
+      .row.mobile-stack { align-items: stretch; flex-direction: column; }
+      .row.mobile-stack button { width: 100%; }
+    }
+  </style>
+</head>
+
+<body>
+<div class="app">
+
+  <header>
+    <div class="brand">
+      <div class="logo">I</div>
+      <div>
+        <h1>Instadew <span style="color:#a69aff">WebSocket Lab</span></h1>
+        <p class="muted small">Real-time connection testing dashboard</p>
+      </div>
+    </div>
+
+    <div class="status">
+      <span id="statusDot" class="dot"></span>
+      <span id="statusText">Disconnected</span>
+    </div>
+  </header>
+
+  <div class="grid">
+
+    <!-- LEFT: CONNECTION -->
+    <aside class="stack">
+      <section class="panel">
+        <h2>⚙ Connection settings</h2>
+
+        <div class="field">
+          <label for="host">WebSocket host</label>
+          <input id="host"
+            value="wss://maximize-recycler-spectator.ngrok-free.dev"
+            spellcheck="false" />
+        </div>
+
+        <div class="field">
+          <label for="endpoint">Endpoint path</label>
+          <input id="endpoint"
+            value="/ws/call/"
+            spellcheck="false" />
+        </div>
+
+        <div class="field">
+          <label for="room">Room name</label>
+          <input id="room" value="test123" spellcheck="false" />
+        </div>
+
+        <div class="field">
+          <label for="query">Additional query parameters (optional)</label>
+          <input id="query" placeholder="e.g. debug=1" spellcheck="false" />
+        </div>
+
+        <div class="field">
+          <label>Generated WebSocket URL</label>
+          <textarea id="preview" rows="2" readonly></textarea>
+        </div>
+
+        <div class="actions">
+          <button class="primary" id="connectBtn">Connect</button>
+          <button class="danger" id="disconnectBtn" disabled>Disconnect</button>
+        </div>
+
+        <div class="checkbox">
+          <input type="checkbox" id="autoReconnect" />
+          <label for="autoReconnect" style="margin:0">Auto-reconnect after disconnect</label>
+        </div>
+
+        <div class="field">
+          <label for="retryDelay">Reconnect delay (ms)</label>
+          <input id="retryDelay" type="number" value="3000" min="1000" max="60000" />
+        </div>
+
+        <div class="hint">
+          Your Django route expects <code>/ws/call/&lt;room_name&gt;/</code>.
+          The room name must match <code>\w+</code>.
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>📊 Connection details</h2>
+        <div class="field">
+          <label>Current state</label>
+          <input id="readyState" value="CLOSED" readonly />
+        </div>
+        <div class="field">
+          <label>Connection duration</label>
+          <input id="duration" value="00:00:00" readonly />
+        </div>
+        <div class="field">
+          <label>Last close code</label>
+          <input id="closeCode" value="—" readonly />
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>Last close reason</label>
+          <input id="closeReason" value="—" readonly />
+        </div>
+      </section>
+    </aside>
+
+    <!-- RIGHT: TESTING -->
+    <main class="stack">
+      <section class="stats">
+        <div class="stat">
+          <span class="muted small">Sent messages</span>
+          <strong id="sentCount">0</strong>
+        </div>
+        <div class="stat">
+          <span class="muted small">Received</span>
+          <strong id="receivedCount">0</strong>
+        </div>
+        <div class="stat">
+          <span class="muted small">Errors</span>
+          <strong id="errorCount">0</strong>
+        </div>
+        <div class="stat">
+          <span class="muted small">Reconnects</span>
+          <strong id="retryCount">0</strong>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>✉ Message composer</h2>
+
+        <div class="tabs">
+          <button class="tab active" data-mode="text">Plain text</button>
+          <button class="tab" data-mode="json">JSON</button>
+        </div>
+
+        <div class="editor active" id="textEditor">
+          <label for="textMessage">Message to send</label>
+          <textarea id="textMessage" placeholder="Type your test message...">Hello from Instadew WebSocket Lab</textarea>
+        </div>
+
+        <div class="editor" id="jsonEditor">
+          <label for="jsonMessage">JSON message</label>
+          <textarea id="jsonMessage">{
+  "type": "test",
+  "message": "Hello from Instadew",
+  "room": "test123"
+}</textarea>
+        </div>
+
+        <div class="row mobile-stack" style="margin-top:12px">
+          <button class="primary" id="sendBtn" disabled>Send message</button>
+          <button id="pingBtn" disabled>Send ping JSON</button>
+          <button id="clearComposerBtn">Clear composer</button>
+        </div>
+
+        <p class="muted small" style="margin-top:12px">
+          Messages are sent as-is. Your backend must understand their format.
+        </p>
+      </section>
+
+      <section class="panel">
+        <div class="row mobile-stack" style="justify-content:space-between; margin-bottom:14px">
+          <div>
+            <h2 style="margin-bottom:4px">⌘ Live event console</h2>
+            <p class="muted small">Connection events, outgoing and incoming messages</p>
+          </div>
+          <div class="row">
+            <button id="copyLogsBtn">Copy logs</button>
+            <button id="clearLogsBtn">Clear</button>
+          </div>
+        </div>
+
+        <div class="console" id="console" aria-live="polite">
+          <div class="log info">
+            <span class="time">Ready</span>
+            <span class="tag">INFO</span>
+            <div class="body">Enter your endpoint and press Connect.</div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer>
+    Instadew WebSocket Lab · Browser-based diagnostic tool
+  </footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+
+  let socket = null;
+  let activeMode = "text";
+  let connectedAt = null;
+  let durationTimer = null;
+  let reconnectTimer = null;
+  let manualDisconnect = false;
+  let reconnectAttempts = 0;
+  let sent = 0;
+  let received = 0;
+  let errors = 0;
+  let reconnects = 0;
+  let generation = 0;
+
+  const stateNames = ["CONNECTING", "OPEN", "CLOSING", "CLOSED"];
+
+  function log(type, title, message) {
+    const consoleEl = $("console");
+    const entry = document.createElement("div");
+    entry.className = `log ${type}`;
+
+    const time = document.createElement("span");
+    time.className = "time";
+    time.textContent = new Date().toLocaleTimeString();
+
+    const tag = document.createElement("span");
+    tag.className = "tag";
+    tag.textContent = title;
+
+    const body = document.createElement("div");
+    body.className = "body";
+    body.textContent = message == null ? "" :
+      typeof message === "string" ? message : JSON.stringify(message, null, 2);
+
+    entry.append(time, tag, body);
+    consoleEl.appendChild(entry);
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+  }
+
+  function updateCounters() {
+    $("sentCount").textContent = sent;
+    $("receivedCount").textContent = received;
+    $("errorCount").textContent = errors;
+    $("retryCount").textContent = reconnects;
+  }
+
+  function setStatus(text, state) {
+    $("statusText").textContent = text;
+    $("statusDot").className = "dot" +
+      (state === "connected" ? " connected" :
+       state === "error" ? " error" : "");
+  }
+
+  function updateReadyState() {
+    const state = socket ? socket.readyState : WebSocket.CLOSED;
+    $("readyState").value = stateNames[state] || "UNKNOWN";
+
+    const open = state === WebSocket.OPEN;
+    $("connectBtn").disabled =
+      !!socket && (state === WebSocket.CONNECTING || open);
+    $("disconnectBtn").disabled = !socket ||
+      (state !== WebSocket.CONNECTING && state !== WebSocket.OPEN);
+    $("sendBtn").disabled = !open;
+    $("pingBtn").disabled = !open;
+  }
+
+  function buildUrl() {
+    let host = $("host").value.trim();
+    const endpoint = $("endpoint").value.trim();
+    const room = $("room").value.trim();
+    const query = $("query").value.trim();
+
+    if (!host) throw new Error("WebSocket host is required.");
+    if (!room) throw new Error("Room name is required.");
+
+    host = host.replace(/\/+$/, "");
+
+    if (!/^wss?:\/\//i.test(host)) {
+      throw new Error("Host must begin with wss:// or ws://.");
+    }
+
+    if (/\s/.test(room) || !/^\w+$/.test(room)) {
+      throw new Error("Room name must contain only letters, numbers, and underscores.");
+    }
+
+    const path = "/" + endpoint.replace(/^\/+|\/+$/g, "");
+    const url = new URL(host + path + "/" + encodeURIComponent(room) + "/");
+
+    if (query) {
+      const params = new URLSearchParams(query);
+      params.forEach((value, key) => url.searchParams.set(key, value));
+    }
+
+    return url.toString();
+  }
+
+  function updatePreview() {
+    try {
+      $("preview").value = buildUrl();
+      $("preview").style.borderColor = "";
+    } catch (err) {
+      $("preview").value = err.message;
+      $("preview").style.borderColor = "var(--red)";
+    }
+  }
+
+  function updateDuration() {
+    if (!connectedAt) {
+      $("duration").value = "00:00:00";
+      return;
+    }
+
+    const seconds = Math.floor((Date.now() - connectedAt) / 1000);
+    const h = String(Math.floor(seconds / 3600)).padStart(2, "0");
+    const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
+    const s = String(seconds % 60).padStart(2, "0");
+    $("duration").value = `${h}:${m}:${s}`;
+  }
+
+  function clearTimers() {
+    if (durationTimer) clearInterval(durationTimer);
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    durationTimer = null;
+    reconnectTimer = null;
+  }
+
+  function connect(isRetry = false) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+
+    if (socket && (
+      socket.readyState === WebSocket.CONNECTING ||
+      socket.readyState === WebSocket.OPEN
+    )) {
+      log("warning", "NOTICE", "A connection is already active or connecting.");
+      return;
+    }
+
+    let url;
+    try {
+      url = buildUrl();
+    } catch (err) {
+      errors++;
+      updateCounters();
+      setStatus("Invalid settings", "error");
+      log("error", "CONFIG ERROR", err.message);
+      return;
+    }
+
+    manualDisconnect = false;
+    const myGeneration = ++generation;
+
+    log("info", "CONNECT", url);
+    setStatus("Connecting...", "");
+    $("closeCode").value = "—";
+    $("closeReason").value = "—";
+
+    try {
+      socket = new WebSocket(url);
+    } catch (err) {
+      errors++;
+      updateCounters();
+      setStatus("Connection failed", "error");
+      log("error", "CREATE ERROR", err.message);
+      updateReadyState();
+      scheduleReconnect();
+      return;
+    }
+
+    const currentSocket = socket;
+    updateReadyState();
+
+    currentSocket.onopen = () => {
+      if (generation !== myGeneration) return;
+
+      connectedAt = Date.now();
+      reconnectAttempts = 0;
+      setStatus("Connected", "connected");
+      log("success", "OPEN", "WebSocket connection established.");
+
+      if (isRetry) {
+        log("success", "RECONNECTED", "Connection restored.");
+      }
+
+      if (durationTimer) clearInterval(durationTimer);
+      durationTimer = setInterval(updateDuration, 1000);
+
+      updateReadyState();
+    };
+
+    currentSocket.onmessage = (event) => {
+      if (generation !== myGeneration) return;
+
+      received++;
+      updateCounters();
+
+      let message = event.data;
+      if (typeof message === "string") {
+        try {
+          message = JSON.stringify(JSON.parse(message), null, 2);
+        } catch (_) {}
+      } else if (message instanceof Blob) {
+        message = `[Binary/Blob message: ${message.size} bytes]`;
+      } else if (message instanceof ArrayBuffer) {
+        message = `[Binary message: ${message.byteLength} bytes]`;
+      }
+
+      log("received", "RECEIVED", message);
+    };
+
+    currentSocket.onerror = () => {
+      if (generation !== myGeneration) return;
+
+      errors++;
+      updateCounters();
+      setStatus("Socket error", "error");
+      log("error", "ERROR",
+        "WebSocket error event. Check the server, URL, ASGI configuration and browser Network panel.");
+    };
+
+    currentSocket.onclose = (event) => {
+      if (generation !== myGeneration) return;
+
+      connectedAt = null;
+      if (durationTimer) clearInterval(durationTimer);
+      durationTimer = null;
+      updateDuration();
+
+      $("closeCode").value = event.code;
+      $("closeReason").value = event.reason || "(no reason provided)";
+
+      log(event.wasClean ? "info" : "warning", "CLOSE",
+        `Code: ${event.code}\nReason: ${event.reason || "(empty)"}\nClean: ${event.wasClean}`);
+
+      socket = null;
+      updateReadyState();
+
+      if (manualDisconnect) {
+        setStatus("Disconnected", "");
+      } else {
+        setStatus("Connection closed", "error");
+        scheduleReconnect();
+      }
+    };
+  }
+
+  function scheduleReconnect() {
+    if (manualDisconnect || !$("autoReconnect").checked) return;
+    if (reconnectTimer) return;
+
+    const delay = Math.max(1000, Number($("retryDelay").value) || 3000);
+    reconnectAttempts++;
+    reconnects++;
+    updateCounters();
+
+    log("warning", "RETRY",
+      `Reconnect attempt ${reconnectAttempts} scheduled in ${delay} ms.`);
+
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      if (!manualDisconnect && $("autoReconnect").checked) {
+        connect(true);
+      }
+    }, delay);
+  }
+
+  function disconnect() {
+    manualDisconnect = true;
+    clearTimers();
+    connectedAt = null;
+    updateDuration();
+
+    if (socket) {
+      const current = socket;
+      log("info", "DISCONNECT", "Closing WebSocket connection.");
+      current.close(1000, "Closed by user");
+    } else {
+      setStatus("Disconnected", "");
+      updateReadyState();
+    }
+  }
+
+  function sendMessage() {
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      log("error", "SEND ERROR", "WebSocket is not connected.");
+      return;
+    }
+
+    let message;
+
+    if (activeMode === "json") {
+      try {
+        const parsed = JSON.parse($("jsonMessage").value);
+        message = JSON.stringify(parsed);
+      } catch (err) {
+        errors++;
+        updateCounters();
+        log("error", "INVALID JSON", err.message);
+        return;
+      }
+    } else {
+      message = $("textMessage").value;
+    }
+
+    try {
+      socket.send(message);
+      sent++;
+      updateCounters();
+      log("sent", "SENT", message);
+    } catch (err) {
+      errors++;
+      updateCounters();
+      log("error", "SEND ERROR", err.message);
+    }
+  }
+
+  function sendPingJson() {
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+
+    const ping = JSON.stringify({
+      type: "ping",
+      timestamp: new Date().toISOString()
+    });
+
+    try {
+      socket.send(ping);
+      sent++;
+      updateCounters();
+      log("sent", "PING JSON", ping);
+    } catch (err) {
+      errors++;
+      updateCounters();
+      log("error", "PING ERROR", err.message);
+    }
+  }
+
+  $("connectBtn").addEventListener("click", () => connect(false));
+  $("disconnectBtn").addEventListener("click", disconnect);
+  $("sendBtn").addEventListener("click", sendMessage);
+  $("pingBtn").addEventListener("click", sendPingJson);
+
+  $("clearComposerBtn").addEventListener("click", () => {
+    $("textMessage").value = "";
+    $("jsonMessage").value = "";
+  });
+
+  $("clearLogsBtn").addEventListener("click", () => {
+    $("console").replaceChildren();
+    log("info", "CLEAR", "Console cleared.");
+  });
+
+  $("copyLogsBtn").addEventListener("click", async () => {
+    const text = Array.from($("console").querySelectorAll(".log"))
+      .map(el => {
+        const time = el.querySelector(".time")?.textContent || "";
+        const tag = el.querySelector(".tag")?.textContent || "";
+        const body = el.querySelector(".body")?.textContent || "";
+        return `[${time}] ${tag}\n${body}`;
+      }).join("\n\n");
+
+    try {
+      await navigator.clipboard.writeText(text);
+      log("success", "COPY", "Console logs copied to clipboard.");
+    } catch (_) {
+      log("warning", "COPY FAILED",
+        "Clipboard permission unavailable. Select and copy the console text manually.");
+    }
+  });
+
+  document.querySelectorAll("[data-mode]").forEach(button => {
+    button.addEventListener("click", () => {
+      activeMode = button.dataset.mode;
+
+      document.querySelectorAll("[data-mode]").forEach(b =>
+        b.classList.toggle("active", b === button)
+      );
+
+      $("textEditor").classList.toggle("active", activeMode === "text");
+      $("jsonEditor").classList.toggle("active", activeMode === "json");
+    });
+  });
+
+  ["host", "endpoint", "room", "query"].forEach(id => {
+    $(id).addEventListener("input", updatePreview);
+  });
+
+  window.addEventListener("beforeunload", () => {
+    manualDisconnect = true;
+    clearTimers();
+    if (socket) socket.close();
+  });
+
+  updatePreview();
+  updateReadyState();
+  updateCounters();
+})();
+</script>
+</body>
+</html>

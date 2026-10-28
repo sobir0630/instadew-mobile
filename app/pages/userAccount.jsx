@@ -1,5 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { VideoView, useVideoPlayer } from "expo-video";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -18,8 +20,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import * as Clipboard from "expo-clipboard";
-import { VideoView, useVideoPlayer } from "expo-video";
 import Svg, { Circle, Line, Path, Polygon, Polyline, Rect } from "react-native-svg";
 
 import API from "../../api/api/server";
@@ -76,23 +76,42 @@ async function toggleFollowAPI() {
   return res.data;
 }
 
-async function fetchComments(postId) {
+async function fetchComments(resource) {
   const headers = await auth();
-  const res = await API.get(`/comments/comments/?post=${postId}`, { headers });
+  const id = resource?.id;
+  if (!id) return [];
+
+  const url = isVideoResource(resource)
+    ? `/comments/comments/?video=${id}`
+    : `/comments/comments/?post=${id}`;
+
+  const res = await API.get(url, { headers });
   const d = res.data;
   return Array.isArray(d) ? d : d?.results || d?.comments || [];
 }
 
-async function submitComment(postId, text) {
+async function submitComment(resource, text) {
   const myId = await getMyId();
   const headers = await auth();
-  const res = await API.post(`/comments/comments/`, { post_id: postId, text, user: myId }, { headers });
+  const payload = isVideoResource(resource)
+    ? { video_id: resource.id, text: text.trim(), user: myId }
+    : { post_id: resource.id, text: text.trim(), user: myId };
+
+  const res = await API.post(`/comments/comments/`, payload, { headers });
   return res.data;
 }
 
-async function toggleLikeAPI(postId) {
+async function toggleLikeAPI(resource) {
   const headers = await auth();
-  const res = await API.post(`/posts/post/${postId}/like/`, {}, { headers });
+  const id = resource?.id;
+  if (!id) return null;
+
+  if (isVideoResource(resource)) {
+    const res = await API.post(`/videos/video/${id}/like/`, { id, type: resource }, { headers });
+    return res.data;
+  }
+
+  const res = await API.post(`/posts/post/${id}/like/`, {}, { headers });
   return res.data;
 }
 
@@ -126,6 +145,18 @@ function isImage(post) {
   if (!pic) return false;
   const ext = pic.split("?")[0].split(".").pop().toLowerCase();
   return !["mp4", "webm", "ogg", "mov", "avi", "mkv"].includes(ext);
+}
+
+function isVideoResource(post) {
+  if (!post) return false;
+  return Boolean(
+    post.video ||
+    post.video_file ||
+    post.media ||
+    post.type === "video" ||
+    post.kind === "video" ||
+    post.content_type === "video"
+  );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -231,14 +262,22 @@ const IconGridTab = ({ size = 16, color = "currentColor" }) => (
     <Rect x="3" y="14" width="7" height="7" /><Rect x="14" y="14" width="7" height="7" />
   </Svg>
 );
-const IconHome = ({ size = 22, color = "#57606a" }) => (
+export const IconHome = ({ size = 22, color = "#57606a" }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
-    <Path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><Polyline points="9 22 9 12 15 12 15 22" />
+    <Path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><Polyline points="9 20 9 12 15 12 15 20" />
   </Svg>
 );
-const IconLogoGlobe = ({ size = 26, color = "#fff" }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5">
-    <Path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" />
+export const IconLogoGlobe = ({ size = 26, color = "#fff" }) => (
+  <Svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+  >
+    <Path
+      d="M21.8 2.2 2.7 9.6c-1.3.5-1.3 1.2-.2 1.6l4.9 1.5 1.9 6.1c.2.7.1 1 .8 1 .5 0 .8-.2 1.1-.5l2.4-2.3 5 3.7c.9.5 1.5.2 1.7-.9L23.2 3.5c.3-1.4-.5-2-1.4-1.3ZM9.1 12.4l10.1-6.8c.5-.3.9-.1.5.2l-8.3 7.7-.3 3.3-2-4.4Z"
+      fill={color}
+    />
   </Svg>
 );
 const IconCreate = ({ size = 22, color = "#57606a" }) => (
@@ -302,12 +341,12 @@ function useCommentsAndLike(post, onLikeChange) {
     if (!post) return;
     let cancelled = false;
     setCLoading(true);
-    fetchComments(post.id)
+    fetchComments(post)
       .then((d) => { if (!cancelled) setComments(d); })
       .catch(() => { if (!cancelled) setComments([]); })
       .finally(() => { if (!cancelled) setCLoading(false); });
     return () => { cancelled = true; };
-  }, [post?.id]);
+  }, [post?.id, post?.video, post?.video_file, post?.media, post?.type, post?.kind, post?.content_type]);
 
   const send = async () => {
     const t = text.trim();
@@ -315,7 +354,7 @@ function useCommentsAndLike(post, onLikeChange) {
     setSending(true);
     try {
       const username = await AsyncStorage.getItem("username");
-      const newC = await submitComment(post.id, t);
+      const newC = await submitComment(post, t);
       setComments((p) => [
         ...p,
         newC?.id ? newC : { id: Date.now(), text: t, body: t, author: { username: username || "you" }, created_at: new Date().toISOString() },
@@ -337,7 +376,7 @@ function useCommentsAndLike(post, onLikeChange) {
     setLiked(nextLiked); setLikeCount(nextCount);
     onLikeChange?.(post.id, nextLiked, nextCount);
     try {
-      const res = await toggleLikeAPI(post.id);
+      const res = await toggleLikeAPI(post);
       if (res?.is_liked !== undefined && res.is_liked !== nextLiked) setLiked(res.is_liked);
       if (res?.likes_count !== undefined && res.likes_count !== nextCount) {
         setLikeCount(res.likes_count);
@@ -443,7 +482,7 @@ function PostModal({ post, userAvatar, userName, visible, onClose, onLikeChange 
               <TextInput
                 value={text}
                 onChangeText={setText}
-                placeholder="Comment yozing…"
+                placeholder="Comment write…"
                 placeholderTextColor="#9aa0ab"
                 editable={!sending}
                 style={styles.fullModalInput}
@@ -488,8 +527,8 @@ function VideoModal({ post, userAvatar, userName, visible, onClose, onLikeChange
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={[styles.fullModalOverlay, { backgroundColor: "rgba(5,5,15,0.92)" }]}>
-        <KeyboardAvoidingView style={[styles.fullModalCard, { backgroundColor: "#0d0f14" }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <View style={[styles.fullModalImageWrap, { backgroundColor: "#000", position: "relative" }]}>
+        <KeyboardAvoidingView style={[styles.fullModalCard, { backgroundColor: "#f3f4f6" }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <View style={[styles.fullModalImageWrap, { backgroundColor: "#514e4e", position: "relative" }]}>
             {videoSrc ? (
               <VideoView
                 player={player}
@@ -504,7 +543,7 @@ function VideoModal({ post, userAvatar, userName, visible, onClose, onLikeChange
               </View>
             )}
             <TouchableOpacity onPress={onClose} style={styles.videoCloseBtn}>
-              <IconClose size={16} color="#fff" />
+              <IconClose size={16} color="#d3baba" />
             </TouchableOpacity>
           </View>
 
@@ -545,7 +584,7 @@ function VideoModal({ post, userAvatar, userName, visible, onClose, onLikeChange
             <View style={styles.fullModalActionsRow}>
               <TouchableOpacity onPress={handleLike} disabled={likeLoading} style={styles.actionBtn}>
                 <IconHeart filled={liked} color={liked ? "#e53935" : "#6b7280"} />
-                <Text style={[styles.actionCount, liked && { color: "#e53935" }]}>{fmtNum(likeCount)}</Text>
+                <Text style={[styles.actionCount, liked && { color: "#b2a7a7" }]}>{fmtNum(likeCount)}</Text>
               </TouchableOpacity>
               <View style={styles.actionBtn}>
                 <IconComment />
@@ -557,8 +596,8 @@ function VideoModal({ post, userAvatar, userName, visible, onClose, onLikeChange
               <TextInput
                 value={text}
                 onChangeText={setText}
-                placeholder="Comment yozing…"
-                placeholderTextColor="#9aa0ab"
+                placeholder="Comment write"
+                placeholderTextColor="#72757a"
                 editable={!sending}
                 style={styles.fullModalInput}
                 onSubmitEditing={send}
@@ -566,7 +605,7 @@ function VideoModal({ post, userAvatar, userName, visible, onClose, onLikeChange
               <TouchableOpacity
                 onPress={send}
                 disabled={!text.trim() || sending}
-                style={[styles.fullModalSendBtn, { backgroundColor: text.trim() && !sending ? "#6366f1" : "#eceef1" }]}
+                style={[styles.fullModalSendBtn, { backgroundColor: text.trim() && !sending ? "#6366f1" : "#8da3ca" }]}
               >
                 {sending ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.fullModalSendText}>Post</Text>}
               </TouchableOpacity>
@@ -1101,7 +1140,7 @@ export default function UserProfileScreen() {
   const navItems = [
     { href: "/pages/home/FeedScreen", active: false, Icon: IconHome },
     { href: "/pages/message", active: false, Icon: IconLogoGlobe },
-    { href: "/pages/create/CreatePostScreen", active: false, Icon: IconCreate },
+    { href: "/pages/create/CreatePostScreen", active: false, Icon: IconCreate, isCenter: true },
     { href: "/pages/reels/reels", active: false, Icon: IconMovie },
     { href: "/pages/profile", active: false, Icon: IconPersonNav },
   ];
@@ -1270,15 +1309,18 @@ export default function UserProfileScreen() {
 
       {/* Bottom nav */}
       <View style={styles.bottomNav}>
-        {navItems.map((item, i) => (
-          <TouchableOpacity
+        {navItems.map((item, i) => {
+          let isCenter = item.isCenter
+          return (
+            <TouchableOpacity
             key={i}
             onPress={() => router.push(item.href)}
             style={[styles.navItem, item.active && styles.navItemActive]}
           >
-            <item.Icon color={item.active ? "#0969da" : "#57606a"} />
+            <item.Icon color={item.active ? "#0969da" : "#000000"} size={item.isCenter ? 34 : 24} />
           </TouchableOpacity>
-        ))}
+          )
+        })}
       </View>
     </SafeAreaView>
   );
@@ -1425,8 +1467,8 @@ const styles = StyleSheet.create({
   fullModalActionsRow: { flexDirection: "row", alignItems: "center", gap: 16, padding: 14, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: "#f4f5f7" },
   actionBtn: { flexDirection: "row", alignItems: "center", gap: 5 },
   actionCount: { fontSize: 13, fontWeight: "700", color: "#6b7280" },
-  fullModalInputRow: { flexDirection: "row", alignItems: "center", gap: 8, padding: 14, paddingTop: 10, borderTopWidth: 1, borderTopColor: "#f4f5f7" },
-  fullModalInput: { flex: 1, paddingVertical: 9, paddingHorizontal: 13, borderWidth: 1.5, borderColor: "#eceef1", borderRadius: 12, fontSize: 13, backgroundColor: "#f8f9fb", color: "#0d0f14" },
+  fullModalInputRow: { flexDirection: "row", alignItems: "center", gap: 8, padding: 14, paddingTop: 10, borderTopWidth: 1, borderTopColor: "#323842" },
+  fullModalInput: { flex: 1, paddingVertical: 9, paddingHorizontal: 13, borderWidth: 1.5, borderColor: "#eceef1", borderRadius: 12, fontSize: 13, backgroundColor: "#b8c2d6", color: "#0d0f14" },
   fullModalSendBtn: { paddingVertical: 9, paddingHorizontal: 16, borderRadius: 12, minWidth: 58, alignItems: "center", justifyContent: "center" },
   fullModalSendText: { color: "#fff", fontWeight: "700", fontSize: 13 },
 

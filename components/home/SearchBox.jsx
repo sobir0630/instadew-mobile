@@ -5,6 +5,7 @@ import { styles } from "../../styles/home/FeedStyles";
 import { getInitials } from "../../utils/home/Formatters";
 import { Avatar } from "./Avatar";
 import { IconChevronRight, IconClose, IconSearch } from "./icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export function SearchBox({ users = [] }) {
   const [query, setQuery] = useState("");
@@ -22,12 +23,37 @@ export function SearchBox({ users = [] }) {
     );
   }, [query, users]);
 
-  const goToUser = (username) => {
+
+  const goToUser = async (username) => {
     setQuery("");
     setSuggestions([]);
     setFocused(false);
-    router.push(`/pages/userAccount?username=${encodeURIComponent(username)}`);
+
+    try {
+      // Tizimga kirgan foydalanuvchining username'ini olamiz
+      const personUser = await AsyncStorage.getItem("username");
+
+      console.log("Login username:", personUser);
+      console.log("Search username:", username);
+
+      // Username'larni solishtiramiz
+      if (
+        personUser &&
+        username.trim().toLowerCase() === personUser.trim().toLowerCase()
+      ) {
+        // O'z profilingga o'tish
+        router.push("/pages/person/ProfileScreen");
+      } else {
+        // Boshqa foydalanuvchining profiliga o'tish
+        router.push(
+          `/pages/userAccount?username=${encodeURIComponent(username)}`
+        );
+      }
+    } catch (error) {
+      console.error("User navigation error:", error);
+    }
   };
+
 
   return (
     <View style={{ flex: 1, position: "relative" }}>

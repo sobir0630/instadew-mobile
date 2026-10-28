@@ -221,7 +221,7 @@ export default function LoginScreen() {
               <Text 
                 style={styles.footerLink}
                 onPress={() => router.push("/auth/register/RegisterScreen")}
-                >Create account</Text>
+                >Create account </Text>
             </View>
           </View>
 

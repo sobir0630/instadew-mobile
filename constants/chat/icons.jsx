@@ -67,6 +67,22 @@ export const IconEdit = ({ size = 13, color = "currentColor" }) => (
     <Path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
   </Svg>
 );
+
+export const IconReply = ({ size = 18, color = "currentColor" }) => (
+  <Svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={color}
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <Path d="M9 17 4 12l5-5" />
+    <Path d="M4 12h10a6 6 0 0 1 6 6v1" />
+  </Svg>
+);
 export const IconCopy = ({ size = 13, color = "currentColor" }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
     <Path d="M9 9h13a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2z" transform="translate(-2 -2)" />
@@ -83,33 +99,46 @@ export const IconCheck = ({ size = 15, color = "#fff" }) => (
     <Polyline points="20 6 9 17 4 12" />
   </Svg>
 );
-export const IconHome = ({ size = 22, color = "currentColor" }) => (
+
+export const IconHome = ({ size = 22, color = "#ffffff" }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
-    <Path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><Polyline points="9 22 9 12 15 12 15 22" />
+    <Path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><Polyline points="9 20 9 12 15 12 15 20" />
   </Svg>
 );
+
+
 export const IconLogoGlobe = ({ size = 26, color = "#fff" }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5">
-    <Path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" />
+  <Svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+  >
+    <Path
+      d="M21.8 2.2 2.7 9.6c-1.3.5-1.3 1.2-.2 1.6l4.9 1.5 1.9 6.1c.2.7.1 1 .8 1 .5 0 .8-.2 1.1-.5l2.4-2.3 5 3.7c.9.5 1.5.2 1.7-.9L23.2 3.5c.3-1.4-.5-2-1.4-1.3ZM9.1 12.4l10.1-6.8c.5-.3.9-.1.5.2l-8.3 7.7-.3 3.3-2-4.4Z"
+      fill={color}
+    />
   </Svg>
 );
+
 export const IconCreate = ({ size = 22, color = "#57606a" }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
     <Rect x="3" y="3" width="18" height="18" rx="2" />
     <Line x1="12" y1="8" x2="12" y2="16" /><Line x1="8" y1="12" x2="16" y2="12" />
   </Svg>
 );
-export const IconMovie = ({ size = 22, color = "currentColor" }) => (
+export const IconMovie = ({ size = 22, color = "#57606a" }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
-    <Polygon points="23 7 16 12 23 17 23 7" /><Path d="M1 5h15a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H1z" />
+    <Polygon points="23 7 16 12 23 17 23 7" />
+    <Rect x="1" y="5" width="15" height="14" rx="2" />
   </Svg>
 );
-export const IconPerson = ({ size = 22, color = "currentColor" }) => (
+export const IconPerson = ({ size = 22, color = "#57606a" }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
     <Path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><Circle cx="12" cy="7" r="4" />
   </Svg>
 );
-export const IconPaperclip = ({ size = 20, color = "currentColor" }) => (
+export const IconPaperclip = ({ size = 20, color = "#57606a" }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
     <Path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
   </Svg>

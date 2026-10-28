@@ -75,7 +75,7 @@ export const styles = StyleSheet.create({
   viewerCounter: { position: "absolute", top: 55, alignSelf: "center", color: "#fff", fontSize: 13, fontWeight: "600", zIndex: 10 },
   viewerPage: { width: SCREEN_W, alignItems: "center", justifyContent: "center" },
   viewerImage: { width: SCREEN_W, height: "80%" },
-  viewerVideo: { width: SCREEN_W, height: "70%" },
+  viewerVideo: { width: SCREEN_W, height: "100%" },
   viewerControls: {
     position: "absolute",
     left: 0,

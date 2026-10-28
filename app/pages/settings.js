@@ -381,7 +381,7 @@ export default function SettingsScreen() {
               });
               Alert.alert("Muvaffaqiyatli", "Account muvaffaqiyatli o'chirildi!");
               await AsyncStorage.multiRemove(["token", "user_id"]);
-              router.push("../auth/login");
+              router.push("/auth/login/Loginscreen");
             } catch (e) {
               console.error("Accountni o'chirishda xatolik:", e);
               Alert.alert("Xatolik", "Accountni o'chirishda xatolik yuz berdi.");
@@ -399,7 +399,7 @@ export default function SettingsScreen() {
     if (token) await endCurrentSession(token);
     await AsyncStorage.multiRemove(["token", "user_id"]);
     setShowLogoutModal(false);
-    router.push("../auth/login")
+    router.push("/auth/login/Loginscreen")
   };
 
   const fmtNum = (n) => (n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n));

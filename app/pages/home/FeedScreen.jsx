@@ -46,6 +46,9 @@ export default function FeedScreen() {
   const [reels, setReels] = useState([]);
   const { visibleId, viewabilityConfig, onViewableItemsChanged } = useViewableVideo();
 
+  // music player state
+  const [musicPlayerVisible, setMusicPlayerVisible] = useState(false);
+
   // ── STORY TIZIMI ──────────────────────────────────────────────────────
   // fetchStoryGroups() hozircha api/storyApi.js dagi MOCK (lokal) ma'lumot
   // qaytaradi — bitta sinov video-storysi bilan. Backend tayyor bo'lganda
@@ -342,7 +345,7 @@ export default function FeedScreen() {
       {/* Bottom nav */}
       <View style={styles.bottomNav}>
         {navItems.map((item, i) => {
-          const isCenter = item.isCenter;
+          let isCenter = item.isCenter;
           return (
             <TouchableOpacity
               key={i}
@@ -350,7 +353,7 @@ export default function FeedScreen() {
               style={[styles.navItem, isCenter && styles.centerItem]}
             >
               <item.Icon
-                color={isCenter ? "#010811" : item.active ? "#1525d3" : "#92a2b4"}
+                color={isCenter ? "#010811" : item.active ? "#1541d3" : "#10130f"}
                 size={isCenter ? 34 : 24}
               />
             </TouchableOpacity>
